@@ -1,0 +1,47 @@
+# Despliega docs/ al hosting de Spaceship por FTP cada vez que se actualiza main.
+# Requiere en Settings → Secrets and variables → Actions:
+#   Secrets:   FTP_SERVER, FTP_USERNAME, FTP_PASSWORD
+#   Variables (opcionales): FTP_SERVER_DIR (por defecto public_html/), FTP_PROTOCOL (por defecto ftps)
+name: Deploy a Spaceship
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/deploy-spaceship.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-spaceship
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar credenciales
+        id: check
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+        run: |
+          if [ -z "$FTP_SERVER" ]; then
+            echo "::warning::Faltan los secrets FTP_* — se omite el despliegue."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.ready == 'true'
+
+      - name: Subir docs/ por FTP
+        if: steps.check.outputs.ready == 'true'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
+          local-dir: ./docs/
+          server-dir: ${{ vars.FTP_SERVER_DIR || 'public_html/' }}
