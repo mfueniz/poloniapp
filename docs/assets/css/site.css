@@ -1,0 +1,371 @@
+/* poloniapp — hoja de estilos, escrita a mano (reemplaza el CSS generado por el export de Claude Design).
+   Paleta y tipografía: ver DECISIONS.md — Caprasimo (headings) + Figtree (body). */
+
+:root {
+  --color-primary: #D85A30;
+  --color-secondary: #C88A3D;
+  --color-ink: #2C2C2A;
+  --color-cream: #f5ead8;
+  --color-paper: #faf9f5;
+  --color-burgundy: #6E2F35;
+  --color-tag-bg: #efe4d0;
+  --radius-card: 20px;
+  --radius-pill: 999px;
+  --font-heading: 'Caprasimo', serif;
+  --font-body: 'Figtree', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 84px; /* espacio para tab bar fija */
+}
+
+/* --- Header --- */
+.site-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 20px 8px;
+}
+.site-header img { width: 28px; height: 28px; }
+.site-header .wordmark {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  color: var(--color-ink);
+}
+
+/* --- Hero --- */
+.hero { padding: 8px 20px 20px; }
+.hero h1 {
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  line-height: 1.25;
+  margin: 0 0 10px;
+  color: var(--color-ink);
+}
+.hero p {
+  margin: 0;
+  color: #6b6b66;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+/* --- Chips --- */
+.chips { padding: 4px 20px 4px; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: 0 0 auto;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid #ddd3bf;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chip.active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+.subchips {
+  padding: 8px 20px 12px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  animation: subchips-in .18s ease-out;
+}
+.subchips::-webkit-scrollbar { display: none; }
+.subchips .chip { background: var(--color-cream); border-color: var(--color-cream); font-size: 0.8rem; }
+.subchips .chip.active { background: var(--color-secondary); border-color: var(--color-secondary); color: #fff; }
+@keyframes subchips-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* --- Activities grid --- */
+.section { padding: 20px 20px 4px; }
+.section-title {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  margin: 0 0 12px;
+}
+.activities-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 0 20px;
+}
+.activity-card {
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--color-cream);
+  position: relative;
+  aspect-ratio: 3 / 4;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  color: #fff;
+  text-decoration: none;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.activity-card.placeholder {
+  background: var(--color-tag-bg);
+  align-items: center;
+  justify-content: center;
+}
+.activity-card.placeholder img { width: 40%; opacity: 0.85; }
+.activity-card .scrim {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.65) 100%);
+}
+.activity-card .tag {
+  position: absolute; top: 10px; left: 10px;
+  background: rgba(250,249,245,0.9);
+  color: var(--color-ink);
+  font-size: 0.65rem;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  z-index: 1;
+}
+.activity-card .info { position: relative; padding: 10px; z-index: 1; }
+.activity-card .info .title { font-size: 0.85rem; font-weight: 600; line-height: 1.25; margin: 0 0 4px; }
+.activity-card .info .when { font-size: 0.72rem; opacity: 0.9; margin: 0; }
+.activity-card.placeholder .info .title,
+.activity-card.placeholder .info .when { color: var(--color-ink); }
+
+.see-all {
+  display: block;
+  text-align: right;
+  padding: 14px 20px 4px;
+  color: var(--color-primary);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* --- Posts --- */
+.posts-list { padding: 0 20px; display: flex; flex-direction: column; gap: 14px; }
+.post-card {
+  display: flex;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--color-ink);
+}
+.post-card .thumb {
+  width: 64px; height: 64px;
+  border-radius: 14px;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--color-tag-bg);
+  flex: 0 0 auto;
+}
+.post-card .title { font-size: 0.85rem; line-height: 1.3; margin: 0; }
+.badge-sync {
+  font-size: 0.7rem;
+  color: #8a8a84;
+}
+
+/* --- Quiénes somos teaser --- */
+.about-teaser {
+  margin: 24px 20px 0;
+  padding: 20px;
+  background: var(--color-cream);
+  border-radius: var(--radius-card);
+}
+.about-teaser h2 {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+.about-teaser p { margin: 0 0 10px; font-size: 0.88rem; line-height: 1.4; color: #4d4d48; }
+.about-teaser a { color: var(--color-primary); text-decoration: none; font-weight: 600; font-size: 0.85rem; }
+
+/* --- Tab bar --- */
+.tabbar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  max-width: 480px;
+  margin: 0 auto;
+  background: var(--color-paper);
+  border-top: 1px solid #eee2cd;
+  display: flex;
+  justify-content: space-around;
+  padding: 10px 0 max(10px, env(safe-area-inset-bottom));
+}
+.tabbar a {
+  color: #9a9a92;
+  text-decoration: none;
+  font-size: 0.75rem;
+  text-align: center;
+}
+.tabbar a.active { color: var(--color-primary); font-weight: 600; }
+
+.loading-note { padding: 20px; color: #9a9a92; font-size: 0.85rem; }
+
+/* --- Grilla de categorías (Actividades) --- */
+.categories-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 8px 20px 20px;
+}
+.category-card {
+  background: var(--color-cream);
+  border-radius: var(--radius-card);
+  padding: 18px 14px;
+  text-decoration: none;
+  color: var(--color-ink);
+  display: block;
+}
+.category-card .cat-name { font-family: var(--font-heading); font-size: 0.95rem; margin: 0 0 6px; }
+.category-card .cat-count { font-size: 0.75rem; color: #8a8a84; margin: 0; }
+
+/* --- Lista de actividades por categoría --- */
+.activities-list { padding: 4px 20px 20px; display: flex; flex-direction: column; gap: 10px; }
+.activity-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--color-ink);
+  background: var(--color-paper);
+}
+.activity-row .thumb {
+  width: 56px; height: 56px;
+  border-radius: 14px;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--color-tag-bg);
+  flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+}
+.activity-row .thumb.placeholder img { width: 55%; }
+.activity-row .title { margin: 0 0 2px; font-size: 0.9rem; font-weight: 600; }
+.activity-row .when { margin: 0; font-size: 0.78rem; color: #8a8a84; }
+
+/* --- Reserva externa (Confesiones → Setmore) --- */
+.booking-card {
+  display: block;
+  margin: 4px 20px 20px;
+  padding: 20px;
+  background: var(--color-burgundy);
+  border-radius: var(--radius-card);
+  color: #fff;
+  text-decoration: none;
+}
+.booking-card .title { font-family: var(--font-heading); font-size: 1.05rem; margin: 0 0 6px; }
+.booking-card .sub { font-size: 0.85rem; opacity: 0.85; margin: 0 0 16px; line-height: 1.4; }
+.booking-card .cta {
+  display: inline-block;
+  background: #fff;
+  color: var(--color-burgundy);
+  padding: 9px 18px;
+  border-radius: var(--radius-pill);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* --- Detalle de actividad --- */
+.detail-photo {
+  margin: 0 20px;
+  border-radius: var(--radius-card);
+  aspect-ratio: 16 / 10;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: var(--color-tag-bg);
+}
+.detail-photo.placeholder { display: flex; align-items: center; justify-content: center; }
+.detail-photo.placeholder img { width: 30%; }
+.sessions-list { padding: 4px 20px 4px; display: flex; flex-direction: column; gap: 10px; }
+.session-row {
+  background: var(--color-cream);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+.session-row .when { font-weight: 700; margin: 0 0 4px; font-size: 0.88rem; }
+.session-row .topic { margin: 0 0 2px; font-size: 0.85rem; }
+.session-row .speaker { margin: 0 0 4px; font-size: 0.8rem; color: #6b6b66; }
+.session-row .location { margin: 0; font-size: 0.78rem; color: #8a8a84; }
+.session-row .price { margin: 4px 0 0; font-size: 0.8rem; font-weight: 600; color: var(--color-primary); }
+/* --- Texto diario --- */
+.daily-text-card {
+  display: block;
+  margin: 0 20px 8px;
+  padding: 16px 18px;
+  background: var(--color-cream);
+  border-radius: var(--radius-card);
+  text-decoration: none;
+  color: var(--color-ink);
+}
+.daily-text-card .title { font-family: var(--font-heading); font-size: 0.95rem; margin: 0 0 8px; }
+.daily-text-card .excerpt { font-size: 0.85rem; color: #4d4d48; line-height: 1.4; margin: 0 0 10px; }
+
+/* --- Quiénes somos (vista completa) --- */
+.about-p { margin: 0; font-size: 0.9rem; color: #4d4d48; line-height: 1.5; }
+.about-photo {
+  margin: 4px 20px 4px;
+  border-radius: var(--radius-card);
+  aspect-ratio: 16 / 10;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--color-tag-bg);
+}
+.about-block { border-top: 1px solid #eee2cd; padding-top: 16px; margin-top: 8px; }
+.about-list { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.about-list li {
+  font-size: 0.9rem;
+  padding-left: 16px;
+  position: relative;
+}
+.about-list li::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 8px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+/* --- Bubble chat (WhatsApp) --- */
+.chat-bubble {
+  position: fixed;
+  bottom: 84px;
+  right: max(16px, calc((100vw - 480px) / 2 + 16px));
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #25D366;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  z-index: 10;
+  text-decoration: none;
+}
+.chat-bubble svg { width: 26px; height: 26px; }
+
+.cta-inscribir {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: #ddd3bf;
+  color: #8a8a84;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.9rem;
+}

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Manual para admins — Poloniapp</title>
+  <link href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-primary: #D85A30;
+      --color-ink: #2C2C2A;
+      --color-cream: #f5ead8;
+      --color-paper: #faf9f5;
+      --color-border: #e3d9c4;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--color-paper); color: var(--color-ink); font-family: 'Figtree', sans-serif; line-height: 1.55; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 40px 24px 80px; }
+    h1 { font-family: 'Caprasimo', serif; font-size: 1.8rem; margin: 0 0 6px; }
+    .subtitle { color: #6b6b66; margin: 0 0 36px; font-size: 0.95rem; }
+    h2 { font-family: 'Caprasimo', serif; font-size: 1.2rem; margin: 40px 0 12px; display: flex; align-items: center; gap: 10px; }
+    .step-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 50%; background: var(--color-primary);
+      color: #fff; font-family: 'Figtree', sans-serif; font-size: 0.9rem; font-weight: 700; flex: 0 0 auto;
+    }
+    p { font-size: 0.95rem; }
+    .card { background: var(--color-cream); border-radius: 16px; padding: 18px 20px; margin: 14px 0; }
+    .card code { background: #fff; padding: 2px 6px; border-radius: 6px; font-size: 0.85em; }
+    img.shot {
+      display: block; max-width: 100%; border-radius: 12px; border: 1px solid var(--color-border);
+      margin: 14px 0; box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+    .caption { font-size: 0.8rem; color: #8a8a84; margin: -6px 0 0; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; font-size: 0.95rem; }
+    .note {
+      border-left: 3px solid var(--color-primary); padding: 10px 16px; background: var(--color-cream);
+      border-radius: 0 10px 10px 0; font-size: 0.88rem; margin: 16px 0;
+    }
+    a { color: var(--color-primary); }
+    .footer { margin-top: 50px; padding-top: 20px; border-top: 1px solid var(--color-border); font-size: 0.82rem; color: #9a9a92; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Manual para admins</h1>
+    <p class="subtitle">Cómo editar el contenido de Poloniapp sin depender de un desarrollador.</p>
+
+    <h2><span class="step-num">1</span> Entrar al panel</h2>
+    <p>Andá a <a href="../admin/">poloniapp.../admin/</a> e iniciá sesión con el email y contraseña que te dieron. Si no tenés cuenta todavía, pedile a Ignacio que te la cree.</p>
+
+    <h2><span class="step-num">2</span> Editar un texto</h2>
+    <p>En la pestaña <strong>Contenido fijo</strong> vas a ver todos los textos del sitio agrupados por sección (Contacto, Hero, Quiénes somos...). Cada campo tiene su propia caja de texto y su propio botón <strong>Guardar</strong>.</p>
+    <img class="shot" src="img/admin-contenido-fijo.jpg" alt="Panel admin, pestaña Contenido fijo, mostrando los campos de Contacto y Hero">
+    <p class="caption">Así se ve la pestaña "Contenido fijo" — cada bloque es una sección del sitio.</p>
+    <div class="note">El botón <strong>Guardar</strong> de cada campo aparece gris (deshabilitado) hasta que modificás algo en esa caja de texto. Solo se guarda el campo que tocaste — no hace falta guardar todo junto.</div>
+
+    <h2><span class="step-num">3</span> Ver el cambio reflejado</h2>
+    <p>El sitio público lee el contenido en vivo desde la misma base de datos — apenas guardás, el cambio ya está. Solo hay que recargar la página del sitio (no hace falta ningún deploy ni pedirle nada a nadie).</p>
+    <img class="shot" src="img/sitio-home.jpg" alt="Home del sitio público, mostrando el hero y las actividades">
+    <p class="caption">La Home del sitio — el título, subtítulo y las categorías que aparecen acá vienen de lo que cargás en el panel.</p>
+
+    <h2><span class="step-num">4</span> Agregar una imagen</h2>
+    <p>Los campos que terminan en <code>.imagen</code> (por ahora, la foto de "Quiénes somos") tienen un botón para subir un archivo directo desde tu computador o celular — no hace falta subirla a otro lado ni pegar un link. Elegís el archivo, se sube solo, y aparece una vista previa. Después igual hay que apretar <strong>Guardar</strong> para confirmar el cambio.</p>
+
+    <h2><span class="step-num">5</span> Ver la grilla de actividades</h2>
+    <img class="shot" src="img/sitio-actividades.jpg" alt="Grilla de categorías de actividades del sitio público">
+    <p class="caption">Cada categoría muestra cuántas actividades tiene, o "próximamente" si todavía no hay ninguna cargada.</p>
+    <div class="note">Cargar/editar actividades, categorías y ubicaciones desde el panel todavía no está disponible — está en construcción. Por ahora esos cambios los hace Ignacio directo en la base de datos.</div>
+
+    <h2><span class="step-num">6</span> Salir</h2>
+    <p>Arriba a la derecha del panel, click en <strong>salir</strong>. La sesión también se cierra sola después de un tiempo de inactividad.</p>
+
+    <div class="footer">
+      Este manual se actualiza a medida que el panel admin suma funciones (actividades, publicaciones, inscripciones).
+      Cualquier duda, escribile a Ignacio.
+    </div>
+  </div>
+</body>
+</html>
