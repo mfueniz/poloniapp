@@ -1,7 +1,9 @@
 # Despliega docs/ al hosting de Spaceship por FTP cada vez que se actualiza main.
 # Requiere en Settings → Secrets and variables → Actions:
 #   Secrets:   FTP_SERVER, FTP_USERNAME, FTP_PASSWORD
-#   Variables (opcionales): FTP_SERVER_DIR (por defecto public_html/), FTP_PROTOCOL (por defecto ftps)
+#   Variables (opcionales): FTP_SERVER_DIR (por defecto public_html/), FTP_PROTOCOL (por defecto ftps),
+#                           FTP_SECURITY (por defecto strict; loose acepta un certificado que no calza,
+#                           p. ej. al conectar por IP)
 name: Deploy a Spaceship
 
 on:
@@ -45,3 +47,4 @@ jobs:
           protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
           local-dir: ./docs/
           server-dir: ${{ vars.FTP_SERVER_DIR || 'public_html/' }}
+          security: ${{ vars.FTP_SECURITY || 'strict' }}
