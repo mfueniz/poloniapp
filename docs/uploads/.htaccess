@@ -1,0 +1,5 @@
+# Imágenes subidas desde el panel admin: solo se sirven como archivos estáticos.
+<FilesMatch "\.(php\d?|phtml|phar|pl|py|cgi|sh)$">
+  Require all denied
+</FilesMatch>
+Options -Indexes

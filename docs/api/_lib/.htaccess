@@ -1,0 +1,2 @@
+# Archivos internos de la API (SQL de instalación): nunca se sirven por HTTP.
+Require all denied

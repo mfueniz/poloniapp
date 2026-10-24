@@ -1,0 +1,5 @@
+# config.php tiene las credenciales de MySQL: nunca se sirve, ni siquiera ejecutado.
+<Files "config.php">
+  Require all denied
+</Files>
+Options -Indexes

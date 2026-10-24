@@ -1,1 +1,4 @@
 .DS_Store
+
+# Credenciales de MySQL, las genera el deploy
+docs/api/config.php

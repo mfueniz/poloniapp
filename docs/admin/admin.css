@@ -52,6 +52,7 @@ body {
   background: var(--color-primary); color: #fff; font-weight: 600; font-size: 0.9rem; cursor: pointer;
 }
 .login-error { color: #b3392a; font-size: 0.82rem; margin-top: 10px; }
+.login-note { font-size: 0.82rem; color: #6b6b66; margin: 0 0 8px; line-height: 1.4; }
 
 /* --- Tabs --- */
 .admin-tabs { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }

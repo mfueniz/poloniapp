@@ -1,8 +1,21 @@
-// poloniapp — panel admin (Fase 3a: login + contenido fijo)
+// poloniapp — panel admin (contra la API propia en docs/api/, PHP + MySQL)
 
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../assets/js/config.js';
+import { api } from '../assets/js/api.js';
 
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Atajos sobre la API que devuelven { data, error } en vez de lanzar, para que cada tab
+// pueda mostrar el error en su propia línea de estado.
+async function attempt(promise) {
+  try {
+    return { data: await promise, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
+}
+const db = {
+  list: (table) => attempt(api('list', { params: { table } })),
+  save: (table, row) => attempt(api('save', { method: 'POST', params: { table }, body: row })),
+  remove: (table, id) => attempt(api('delete', { method: 'POST', params: { table }, body: { id } })),
+};
 
 const loginView = document.getElementById('login-view');
 const adminView = document.getElementById('admin-view');
@@ -15,45 +28,54 @@ function esc(s) {
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
+let needsSetup = false;
+
 document.getElementById('login-btn').addEventListener('click', async () => {
   loginError.hidden = true;
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
-  const { error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) {
-    loginError.textContent = error.message === 'Invalid login credentials' ? 'Email o contraseña incorrectos.' : error.message;
+  try {
+    // Sin admins todavía (instalación nueva): este mismo form crea el primero y las tablas.
+    const { admin } = await api(needsSetup ? 'setup' : 'login', { method: 'POST', body: { email, password } });
+    showAdmin(admin);
+  } catch (err) {
+    loginError.textContent = err.message;
     loginError.hidden = false;
   }
 });
 
 document.getElementById('logout-btn').addEventListener('click', async () => {
-  await sb.auth.signOut();
+  await attempt(api('logout', { method: 'POST' }));
+  showLogin();
 });
 
-sb.auth.onAuthStateChange((_event, session) => {
-  if (session) {
-    showAdmin(session);
-  } else {
-    loginView.hidden = false;
-    adminView.hidden = true;
-  }
-});
+function showLogin() {
+  loginView.hidden = false;
+  adminView.hidden = true;
+  document.getElementById('setup-note').hidden = !needsSetup;
+  document.getElementById('login-btn').textContent = needsSetup ? 'Crear administrador' : 'Ingresar';
+  document.getElementById('password').autocomplete = needsSetup ? 'new-password' : 'current-password';
+}
 
-async function showAdmin(session) {
-  // Confirma que el usuario logueado está en la allowlist de admins (RLS igual lo bloquea
-  // en escritura si no lo está, pero acá evitamos mostrarle el panel a alguien sin permiso).
-  const { data: adminRow } = await sb.from('admins').select('email').eq('user_id', session.user.id).maybeSingle();
-  if (!adminRow) {
-    loginError.textContent = 'Tu cuenta no tiene permisos de administrador en Poloniapp.';
-    loginError.hidden = false;
-    await sb.auth.signOut();
-    return;
-  }
+function showAdmin(email) {
+  needsSetup = false;
   loginView.hidden = true;
   adminView.hidden = false;
-  document.getElementById('who').textContent = session.user.email;
+  document.getElementById('who').textContent = email;
   loadTab('contenido');
 }
+
+(async function init() {
+  try {
+    const status = await api('status');
+    needsSetup = status.needs_setup;
+    if (status.admin) return showAdmin(status.admin);
+  } catch (err) {
+    loginError.textContent = err.message;
+    loginError.hidden = false;
+  }
+  showLogin();
+})();
 
 // ---------------------------------------------------------------------------
 // Tabs
@@ -75,20 +97,26 @@ function loadTab(tab) {
   if (tab === 'publicaciones') return loadPublicaciones();
   if (tab === 'textodiario') return loadTextoDiario();
   if (tab === 'inscripciones') return loadInscripciones();
+  if (tab === 'admins') return loadAdmins();
   document.getElementById('tab-content').innerHTML = `<p class="coming-soon">Próximamente.</p>`;
 }
 
 // ---------------------------------------------------------------------------
-// Storage — upload de imágenes (bucket público "site-images", solo admins escriben)
+// Upload de imágenes a docs/uploads/ en el mismo hosting (solo admins).
 // Reutilizable desde cualquier tab (contenido fijo, actividades, publicaciones).
+// Devuelve una ruta relativa a la raíz del sitio (ej. "uploads/abc.jpg"), igual que assets/.
 // ---------------------------------------------------------------------------
 async function uploadImage(file) {
-  const ext = file.name.split('.').pop().toLowerCase();
-  const path = `${crypto.randomUUID()}.${ext}`;
-  const { error } = await sb.storage.from('site-images').upload(path, file, { cacheControl: '3600' });
-  if (error) throw error;
-  const { data } = sb.storage.from('site-images').getPublicUrl(path);
-  return data.publicUrl;
+  const form = new FormData();
+  form.append('file', file);
+  const { url } = await api('upload', { method: 'POST', body: form });
+  return url;
+}
+
+// El panel vive en admin/, así que las rutas relativas a la raíz necesitan "../" para la vista previa.
+function previewSrc(url) {
+  if (!url) return '';
+  return /^https?:\/\//.test(url) ? url : '../' + url;
 }
 
 // ---------------------------------------------------------------------------
@@ -98,7 +126,7 @@ async function loadContenido() {
   const container = document.getElementById('tab-content');
   container.innerHTML = `<p class="loading-note">Cargando…</p>`;
 
-  const { data, error } = await sb.from('site_content').select('*').order('section').order('key');
+  const { data, error } = await db.list('site_content');
   if (error) {
     container.innerHTML = `<p class="loading-note">Error cargando contenido: ${esc(error.message)}</p>`;
     return;
@@ -123,7 +151,7 @@ async function loadContenido() {
             ${
               isImage
                 ? `<div class="image-field">
-                     <img class="image-preview" src="${esc(r.value)}" ${r.value ? '' : 'hidden'}>
+                     <img class="image-preview" src="${esc(previewSrc(r.value))}" ${r.value ? '' : 'hidden'}>
                      <input type="file" accept="image/*" class="image-input">
                      <span class="status upload-status"></span>
                    </div>`
@@ -165,7 +193,7 @@ async function loadContenido() {
         try {
           const url = await uploadImage(file);
           textarea.value = url;
-          preview.src = url;
+          preview.src = previewSrc(url);
           preview.hidden = false;
           uploadStatus.textContent = 'Subida ✓ — falta Guardar';
           saveBtn.disabled = false;
@@ -178,13 +206,7 @@ async function loadContenido() {
     saveBtn.addEventListener('click', async () => {
       saveBtn.disabled = true;
       status.textContent = 'Guardando…';
-      const {
-        data: { user },
-      } = await sb.auth.getUser();
-      const { error } = await sb
-        .from('site_content')
-        .update({ value: textarea.value, updated_at: new Date().toISOString(), updated_by: user.id })
-        .eq('key', key);
+      const { error } = await db.save('site_content', { key, value: textarea.value });
       if (error) {
         status.textContent = 'Error: ' + error.message;
         saveBtn.disabled = false;
@@ -202,7 +224,7 @@ async function loadCategorias() {
   const container = document.getElementById('tab-content');
   container.innerHTML = `<p class="loading-note">Cargando…</p>`;
 
-  const { data, error } = await sb.from('categories').select('*').order('sort_order');
+  const { data, error } = await db.list('categories');
   if (error) {
     container.innerHTML = `<p class="loading-note">Error: ${esc(error.message)}</p>`;
     return;
@@ -243,16 +265,14 @@ async function loadCategorias() {
     saveBtn.addEventListener('click', async () => {
       saveBtn.disabled = true;
       status.textContent = 'Guardando…';
-      const { error } = await sb
-        .from('categories')
-        .update({
+      const { error } = await db.save('categories', {
+          id,
           name: card.querySelector('.f-name').value,
           description: card.querySelector('.f-desc').value || null,
           sort_order: Number(card.querySelector('.f-sort').value) || 0,
           bucket: card.querySelector('.f-bucket').value || null,
           visible: card.querySelector('.f-visible').checked,
-        })
-        .eq('id', id);
+        });
       saveBtn.disabled = false;
       status.textContent = error ? 'Error: ' + error.message : 'Guardado ✓';
     });
@@ -281,7 +301,7 @@ async function loadUbicaciones() {
   const container = document.getElementById('tab-content');
   container.innerHTML = `<p class="loading-note">Cargando…</p>`;
 
-  const { data, error } = await sb.from('locations').select('*').order('name');
+  const { data, error } = await db.list('locations');
   if (error) {
     container.innerHTML = `<p class="loading-note">Error: ${esc(error.message)}</p>`;
     return;
@@ -308,9 +328,7 @@ function wireLocationCards(container) {
       }
       saveBtn.disabled = true;
       status.textContent = 'Guardando…';
-      const { error } = id
-        ? await sb.from('locations').update({ name, address }).eq('id', id)
-        : await sb.from('locations').insert({ name, address });
+      const { error } = await db.save('locations', { id, name, address });
       saveBtn.disabled = false;
       if (error) {
         status.textContent = 'Error: ' + error.message;
@@ -322,7 +340,7 @@ function wireLocationCards(container) {
 
     deleteBtn?.addEventListener('click', async () => {
       if (!confirm('¿Borrar esta ubicación? Las sesiones que la usan quedan sin ubicación.')) return;
-      const { error } = await sb.from('locations').delete().eq('id', id);
+      const { error } = await db.remove('locations', id);
       if (error) {
         status.textContent = 'Error: ' + error.message;
       } else {
@@ -363,9 +381,9 @@ async function loadActividades() {
   container.innerHTML = `<p class="loading-note">Cargando…</p>`;
 
   const [{ data: activities, error: e1 }, { data: categories, error: e2 }, { data: locations, error: e3 }] = await Promise.all([
-    sb.from('activities').select('*, sessions(*)').order('title'),
-    sb.from('categories').select('id,name').order('sort_order'),
-    sb.from('locations').select('id,name').order('name'),
+    db.list('activities'),
+    db.list('categories'),
+    db.list('locations'),
   ]);
   const err = e1 || e2 || e3;
   if (err) {
@@ -378,11 +396,6 @@ async function loadActividades() {
   const locOptions = (s) =>
     `<option value="">(sin ubicación)</option>` +
     locations.map((l) => `<option value="${l.id}" ${l.id === s?.location_id ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
-
-  function previewSrc(photoUrl) {
-    if (!photoUrl) return '';
-    return /^https?:\/\//.test(photoUrl) ? photoUrl : '../' + photoUrl;
-  }
 
   function activityCardHtml(a) {
     const sessions = a ? a.sessions || [] : [];
@@ -440,7 +453,7 @@ async function loadActividades() {
   wireActivityCards(container, { locOptions });
 }
 
-function wireSessionRow(row, sb_, locOptions) {
+function wireSessionRow(row, locOptions) {
   const id = row.dataset.id;
   const activityId = row.dataset.activity;
   const saveBtn = row.querySelector('.save');
@@ -467,7 +480,7 @@ function wireSessionRow(row, sb_, locOptions) {
     };
     saveBtn.disabled = true;
     status.textContent = 'Guardando…';
-    const { error } = id ? await sb.from('sessions').update(payload).eq('id', id) : await sb.from('sessions').insert(payload);
+    const { error } = await db.save('sessions', { id, ...payload });
     saveBtn.disabled = false;
     if (error) {
       status.textContent = 'Error: ' + error.message;
@@ -478,7 +491,7 @@ function wireSessionRow(row, sb_, locOptions) {
 
   deleteBtn?.addEventListener('click', async () => {
     if (!confirm('¿Borrar esta sesión?')) return;
-    const { error } = await sb.from('sessions').delete().eq('id', id);
+    const { error } = await db.remove('sessions', id);
     if (error) {
       status.textContent = 'Error: ' + error.message;
     } else {
@@ -506,7 +519,7 @@ function wireActivityCards(container, { locOptions }) {
         try {
           const url = await uploadImage(file);
           photoField.value = url;
-          preview.src = url;
+          preview.src = previewSrc(url);
           preview.hidden = false;
           uploadStatus.textContent = 'Subida ✓ — falta Guardar';
         } catch (err) {
@@ -533,7 +546,7 @@ function wireActivityCards(container, { locOptions }) {
       };
       saveBtn.disabled = true;
       status.textContent = 'Guardando…';
-      const { error } = id ? await sb.from('activities').update(payload).eq('id', id) : await sb.from('activities').insert(payload);
+      const { error } = await db.save('activities', { id, ...payload });
       saveBtn.disabled = false;
       if (error) {
         status.textContent = 'Error: ' + error.message;
@@ -544,7 +557,7 @@ function wireActivityCards(container, { locOptions }) {
 
     deleteBtn?.addEventListener('click', async () => {
       if (!confirm('¿Borrar esta actividad y todas sus sesiones?')) return;
-      const { error } = await sb.from('activities').delete().eq('id', id);
+      const { error } = await db.remove('activities', id);
       if (error) {
         status.textContent = 'Error: ' + error.message;
       } else {
@@ -552,7 +565,7 @@ function wireActivityCards(container, { locOptions }) {
       }
     });
 
-    card.querySelectorAll('.session-crud-row').forEach((row) => wireSessionRow(row, sb, locOptions));
+    card.querySelectorAll('.session-crud-row').forEach((row) => wireSessionRow(row, locOptions));
 
     card.querySelector('.add-session')?.addEventListener('click', () => {
       const list = card.querySelector('.sessions-list');
@@ -560,7 +573,7 @@ function wireActivityCards(container, { locOptions }) {
       wrapper.innerHTML = sessionRowHtml(null, id, locOptions);
       const row = wrapper.firstElementChild;
       list.appendChild(row);
-      wireSessionRow(row, sb, locOptions);
+      wireSessionRow(row, locOptions);
     });
   });
 }
@@ -583,7 +596,7 @@ function postCardHtml(p) {
         <div>
           <label>Foto</label>
           <div class="image-field">
-            <img class="image-preview" src="${esc(p?.image_url && /^https?:\/\//.test(p.image_url) ? p.image_url : p?.image_url ? '../' + p.image_url : '')}" ${p?.image_url ? '' : 'hidden'}>
+            <img class="image-preview" src="${esc(previewSrc(p?.image_url))}" ${p?.image_url ? '' : 'hidden'}>
             <input type="file" accept="image/*" class="image-input">
             <span class="status upload-status"></span>
           </div>
@@ -602,7 +615,7 @@ async function loadPublicaciones() {
   const container = document.getElementById('tab-content');
   container.innerHTML = `<p class="loading-note">Cargando…</p>`;
 
-  const { data, error } = await sb.from('posts').select('*').order('published_at', { ascending: false });
+  const { data, error } = await db.list('posts');
   if (error) {
     container.innerHTML = `<p class="loading-note">Error: ${esc(error.message)}</p>`;
     return;
@@ -629,7 +642,7 @@ async function loadPublicaciones() {
         try {
           const url = await uploadImage(file);
           imageField.value = url;
-          preview.src = url;
+          preview.src = previewSrc(url);
           preview.hidden = false;
           uploadStatus.textContent = 'Subida ✓ — falta Guardar';
         } catch (err) {
@@ -654,7 +667,7 @@ async function loadPublicaciones() {
       };
       saveBtn.disabled = true;
       status.textContent = 'Guardando…';
-      const { error } = id ? await sb.from('posts').update(payload).eq('id', id) : await sb.from('posts').insert(payload);
+      const { error } = await db.save('posts', { id, ...payload });
       saveBtn.disabled = false;
       if (error) {
         status.textContent = 'Error: ' + error.message;
@@ -665,7 +678,7 @@ async function loadPublicaciones() {
 
     deleteBtn?.addEventListener('click', async () => {
       if (!confirm('¿Borrar esta publicación?')) return;
-      const { error } = await sb.from('posts').delete().eq('id', id);
+      const { error } = await db.remove('posts', id);
       if (error) {
         status.textContent = 'Error: ' + error.message;
       } else {
@@ -704,7 +717,7 @@ async function loadTextoDiario() {
   const container = document.getElementById('tab-content');
   container.innerHTML = `<p class="loading-note">Cargando…</p>`;
 
-  const { data, error } = await sb.from('daily_texts').select('*').order('date', { ascending: false });
+  const { data, error } = await db.list('daily_texts');
   if (error) {
     container.innerHTML = `<p class="loading-note">Error: ${esc(error.message)}</p>`;
     return;
@@ -733,10 +746,7 @@ async function loadTextoDiario() {
       }
       saveBtn.disabled = true;
       status.textContent = 'Guardando…';
-      const payload = { date, title, excerpt, external_url: externalUrl, scraped_at: new Date().toISOString() };
-      const { error } = id
-        ? await sb.from('daily_texts').update(payload).eq('id', id)
-        : await sb.from('daily_texts').insert(payload);
+      const { error } = await db.save('daily_texts', { id, date, title, excerpt, external_url: externalUrl });
       saveBtn.disabled = false;
       if (error) {
         status.textContent = 'Error: ' + error.message;
@@ -747,7 +757,7 @@ async function loadTextoDiario() {
 
     deleteBtn?.addEventListener('click', async () => {
       if (!confirm('¿Borrar este texto diario?')) return;
-      const { error } = await sb.from('daily_texts').delete().eq('id', id);
+      const { error } = await db.remove('daily_texts', id);
       if (error) {
         status.textContent = 'Error: ' + error.message;
       } else {
@@ -764,10 +774,7 @@ async function loadInscripciones() {
   const container = document.getElementById('tab-content');
   container.innerHTML = `<p class="loading-note">Cargando…</p>`;
 
-  const { data, error } = await sb
-    .from('registrations')
-    .select('*, sessions(date, weekday, time_start, activities(title))')
-    .order('created_at', { ascending: false });
+  const { data, error } = await db.list('registrations');
   if (error) {
     container.innerHTML = `<p class="loading-note">Error: ${esc(error.message)}</p>`;
     return;
@@ -783,18 +790,98 @@ async function loadInscripciones() {
       <tr><th>Fecha</th><th>Nombre</th><th>Email</th><th>Teléfono</th><th>Actividad</th><th>Sesión</th></tr>
       ${data
         .map((r) => {
-          const s = r.sessions;
-          const when = s ? s.date || s.weekday || '' : '';
+          const when = r.session_date || r.session_weekday || '';
           return `
         <tr>
           <td>${esc(new Date(r.created_at).toLocaleDateString('es-CL'))}</td>
           <td>${esc(r.name)}</td>
           <td>${esc(r.email)}</td>
           <td>${esc(r.phone)}</td>
-          <td>${esc(s?.activities?.title)}</td>
+          <td>${esc(r.activity_title)}</td>
           <td>${esc(when)}</td>
         </tr>`;
         })
         .join('')}
     </table>`;
+}
+
+// ---------------------------------------------------------------------------
+// Tab: Administradores (antes se gestionaban a mano en Supabase Auth)
+// ---------------------------------------------------------------------------
+async function loadAdmins() {
+  const container = document.getElementById('tab-content');
+  container.innerHTML = `<p class="loading-note">Cargando…</p>`;
+
+  const { data, error } = await db.list('admins');
+  if (error) {
+    container.innerHTML = `<p class="loading-note">Error: ${esc(error.message)}</p>`;
+    return;
+  }
+
+  const me = document.getElementById('who').textContent;
+  container.innerHTML = `
+    ${data
+      .map(
+        (a) => `
+      <div class="crud-card" data-id="${a.id}">
+        <div class="crud-actions">
+          <strong>${esc(a.email)}</strong>
+          ${a.email === me ? '<span class="status">(vos)</span>' : '<button class="delete">Quitar acceso</button><span class="status"></span>'}
+        </div>
+      </div>`
+      )
+      .join('')}
+    <h3 style="font-size:0.9rem;margin:24px 0 10px;">Nuevo administrador</h3>
+    <div class="crud-card" id="admin-new">
+      <div class="crud-row">
+        <div><label>Email</label><input type="text" class="f-email" autocomplete="off"></div>
+        <div><label>Contraseña inicial (mín. 8 caracteres)</label><input type="password" class="f-password" autocomplete="new-password"></div>
+      </div>
+      <div class="crud-actions"><button class="save">Crear</button><span class="status"></span></div>
+    </div>
+    <h3 style="font-size:0.9rem;margin:24px 0 10px;">Cambiar mi contraseña</h3>
+    <div class="crud-card" id="admin-password">
+      <div class="crud-row">
+        <div><label>Contraseña actual</label><input type="password" class="f-current" autocomplete="current-password"></div>
+        <div><label>Nueva contraseña (mín. 8 caracteres)</label><input type="password" class="f-new" autocomplete="new-password"></div>
+      </div>
+      <div class="crud-actions"><button class="save">Cambiar</button><span class="status"></span></div>
+    </div>`;
+
+  container.querySelectorAll('.crud-card[data-id]').forEach((card) => {
+    card.querySelector('.delete')?.addEventListener('click', async () => {
+      if (!confirm('¿Quitarle el acceso al panel a este administrador?')) return;
+      const { error } = await attempt(api('admin_delete', { method: 'POST', body: { id: card.dataset.id } }));
+      if (error) card.querySelector('.status').textContent = 'Error: ' + error.message;
+      else loadAdmins();
+    });
+  });
+
+  const newCard = document.getElementById('admin-new');
+  newCard.querySelector('.save').addEventListener('click', async () => {
+    const status = newCard.querySelector('.status');
+    status.textContent = 'Guardando…';
+    const { error } = await attempt(
+      api('admin_add', {
+        method: 'POST',
+        body: { email: newCard.querySelector('.f-email').value.trim(), password: newCard.querySelector('.f-password').value },
+      })
+    );
+    if (error) status.textContent = 'Error: ' + error.message;
+    else loadAdmins();
+  });
+
+  const pwCard = document.getElementById('admin-password');
+  pwCard.querySelector('.save').addEventListener('click', async () => {
+    const status = pwCard.querySelector('.status');
+    status.textContent = 'Guardando…';
+    const { error } = await attempt(
+      api('password', {
+        method: 'POST',
+        body: { current: pwCard.querySelector('.f-current').value, new: pwCard.querySelector('.f-new').value },
+      })
+    );
+    status.textContent = error ? 'Error: ' + error.message : 'Contraseña cambiada ✓';
+    if (!error) pwCard.querySelectorAll('input').forEach((i) => (i.value = ''));
+  });
 }

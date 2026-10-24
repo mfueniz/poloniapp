@@ -3,11 +3,10 @@
 ## Links rápidos
 | Link | Para qué sirve |
 |---|---|
-| https://ignacio-aranguiz.github.io/poloniapp/ | Sitio en producción — build nuevo data-driven (swap 2026-09-05) |
-| https://ignacio-aranguiz.github.io/poloniapp/admin/ | Panel admin — login con email + password de Supabase Auth |
-| https://ignacio-aranguiz.github.io/poloniapp/manual/ | Guía paso a paso para los admins (con capturas reales) |
-| https://github.com/ignacio-aranguiz/poloniapp | Repo del código |
-| https://supabase.com/dashboard/project/xxnepqgoirkvikngqnii | Proyecto Supabase — SQL Editor, Table Editor, Auth, Storage |
+| https://poloniapp.cl/ | Sitio en producción (hosting Spaceship, cPanel) |
+| https://poloniapp.cl/admin/ | Panel admin — login con email + contraseña (tabla `admins` en MySQL) |
+| https://poloniapp.cl/manual/ | Guía paso a paso para los admins (con capturas reales) |
+| https://github.com/mfueniz/poloniapp | Repo del código |
 | https://poloniasub35.setmore.com | Sistema de reservas de confesiones (externo al proyecto, solo enlazado) |
 
 **Fase:** iteración-v1 → backend/data-driven — **swap a producción hecho (2026-09-05)**: Fases 1, 2 (a+b+c), 3 y 5 en la raíz; pendiente Fase 4 (inscripciones, bloqueada por feedback de otros admins, reunión ~2026-09-13)
@@ -17,21 +16,17 @@
 Web app informativa (MVP) para un centro cultural del O. en Las Condes (Polonia 306) — capa de identidad, feed de actividades propias por categoría (con detalle propio) + sección secundaria de publicaciones de O. (redirige afuera) + sección "Texto diario" (redirige afuera) + tarjeta de reserva de Confesiones (redirige a Setmore) + bubble chat de contacto a WhatsApp. Ver `PROJECT_BRIEF.md` para el scope original y `DESIGN_BRIEF.md` para la arquitectura de información y paleta visual del v0. **`DECISIONS.md` es la fuente de verdad de todo lo que cambió sobre esos dos documentos durante la iteración v1** — leerlo siempre antes de asumir el estado del contenido/UX.
 
 ## Deploy
-- **Producción (build nuevo, data-driven):** https://ignacio-aranguiz.github.io/poloniapp/
-- **Bundle viejo (respaldo post-swap):** `docs/legacy/index.html` (no servido, queda en el repo; también existe el tag de git `v0-mockup-backup` con el estado previo a toda la iteración v1).
-- **Panel admin:** https://ignacio-aranguiz.github.io/poloniapp/admin/ (login Supabase Auth)
-- **Manual para admins:** https://ignacio-aranguiz.github.io/poloniapp/manual/
-- **Repo:** https://github.com/ignacio-aranguiz/poloniapp (público, requerido por GitHub Pages free)
-- Fuente: `main` / `docs`.
-- **Backend:** Supabase, proyecto `poloniapp` (São Paulo) — URL y keys en `docs/assets/js/config.js` (anon, pública) y en Supabase dashboard (service_role, nunca en el repo).
-- **Backup del v0** (antes de toda la iteración v1) disponible en el tag de git `v0-mockup-backup`.
-- **Reset de password de un admin (fallback manual, vía SQL Editor de Supabase — Postgres):**
-  ```sql
-  update auth.users
-  set encrypted_password = crypt('nueva-password', gen_salt('bf'))
-  where email = 'el-email-del-admin@...';
-  ```
-  Requiere la extensión `pgcrypto` (Supabase la trae habilitada por default). Usar solo desde el SQL Editor del dashboard (nunca exponer esto en el frontend ni en un endpoint).
+- **Producción:** https://poloniapp.cl/ — hosting Spaceship (cPanel + LiteSpeed + PHP + MySQL).
+- **Deploy automático:** `.github/workflows/deploy-spaceship.yml`. Cada push a `main` que toque `docs/` sube `docs/` por FTPS a `/home/zwkosuazxt/poloniapp.cl/` (también se lanza a mano desde Actions → Deploy a Spaceship → Run workflow).
+  - Secrets: `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD`, `DB_NAME`, `DB_USER`, `DB_PASS` (`DB_HOST` opcional, por defecto `localhost`).
+  - Variables: `FTP_SERVER_DIR`, `FTP_SECURITY` (`loose` si se conecta por IP), `FTP_PROTOCOL`.
+- **Backend (desde 2026-10-24):** MySQL en el mismo hosting + API propia en PHP, `docs/api/index.php`. Reemplaza a Supabase (el proyecto de Ignacio dejó de responder y se decidió tener todos los datos en el servidor propio).
+  - `docs/api/config.php` (credenciales MySQL) lo genera el workflow desde los secrets; nunca está en el repo.
+  - Schema y contenido inicial: `docs/api/_lib/schema.sql` y `seed.sql` (traducción a MySQL de `supabase/`). Se corren solos la primera vez que se entra a `/admin/` y se crea el primer administrador.
+  - Imágenes subidas desde el panel: `docs/uploads/` en el servidor (no están en el repo; respaldarlas desde cPanel).
+  - Administradores: se agregan/quitan y se cambia la contraseña desde la pestaña Administradores del panel. Reset manual sin acceso al panel: borrar la fila en `admins` desde phpMyAdmin; si la tabla queda vacía, `/admin/` vuelve a ofrecer crear el primer admin.
+- `supabase/`: schema original de Postgres, solo como referencia histórica.
+- **Bundle viejo (respaldo):** `docs/legacy/index.html`.
 
 ## Qué ya está integrado y en producción (raíz — bundle viejo)
 - Responsivo mobile (2026-08-16).

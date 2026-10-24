@@ -7,11 +7,11 @@
   <title>Poloniapp admin</title>
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="admin.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body>
   <div id="login-view" class="login-box">
     <h1>Poloniapp — admin</h1>
+    <p class="login-note" id="setup-note" hidden>Primera vez: todavía no hay administradores. Elegí el email y la contraseña (mín. 8 caracteres) de la primera cuenta; se crean también las tablas de la base de datos con el contenido inicial.</p>
     <label for="email">Email</label>
     <input id="email" type="text" autocomplete="username">
     <label for="password">Contraseña</label>
@@ -37,6 +37,7 @@
       <button data-tab="publicaciones">Publicaciones</button>
       <button data-tab="textodiario">Texto diario</button>
       <button data-tab="inscripciones">Inscripciones</button>
+      <button data-tab="admins">Administradores</button>
     </nav>
 
     <main id="tab-content">

@@ -1,6 +1,7 @@
 # Despliega docs/ al hosting de Spaceship por FTP cada vez que se actualiza main.
 # Requiere en Settings → Secrets and variables → Actions:
 #   Secrets:   FTP_SERVER, FTP_USERNAME, FTP_PASSWORD
+#              DB_NAME, DB_USER, DB_PASS (base MySQL creada en cPanel; DB_HOST opcional, por defecto localhost)
 #   Variables (opcionales): FTP_SERVER_DIR (por defecto public_html/), FTP_PROTOCOL (por defecto ftps),
 #                           FTP_SECURITY (por defecto strict; loose acepta un certificado que no calza,
 #                           p. ej. al conectar por IP)
@@ -36,6 +37,29 @@ jobs:
 
       - uses: actions/checkout@v4
         if: steps.check.outputs.ready == 'true'
+
+      # Credenciales de MySQL para la API (docs/api/). Nunca están en el repo: se escriben acá
+      # desde los secrets. Si faltan, se corta el deploy, porque subir sin config.php haría que
+      # el deploy borrara el del servidor y el sitio quedaría sin base de datos.
+      - name: Generar docs/api/config.php
+        if: steps.check.outputs.ready == 'true'
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+        run: |
+          if [ -z "$DB_NAME" ] || [ -z "$DB_USER" ] || [ -z "$DB_PASS" ]; then
+            echo "::error::Faltan los secrets DB_NAME, DB_USER y/o DB_PASS."
+            exit 1
+          fi
+          php -r 'echo "<?php\nreturn ", var_export([
+            "db_host" => getenv("DB_HOST") ?: "localhost",
+            "db_name" => getenv("DB_NAME"),
+            "db_user" => getenv("DB_USER"),
+            "db_pass" => getenv("DB_PASS"),
+          ], true), ";\n";' > docs/api/config.php
+          php -l docs/api/config.php
 
       - name: Subir docs/ por FTP
         if: steps.check.outputs.ready == 'true'

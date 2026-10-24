@@ -1,18 +1,17 @@
 // poloniapp — app.js
-// Fetch client-side a Supabase (anon key, RLS pública) + render de toda la SPA.
+// Fetch client-side a la API propia (docs/api/, PHP + MySQL) + render de toda la SPA.
 // Fase 2b: navegación real Home → Actividades (grilla de categorías) → categoría → detalle.
 // Fase 2c: bubble chat → WhatsApp (número editable en site_content.contact.whatsapp).
 
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+import { api } from './api.js';
 
 // Raíz real del sitio (docs/), calculada desde la ubicación de este script — así las rutas
 // relativas de assets (fotos, símbolo) resuelven igual sin importar desde qué profundidad
 // se cargó la página (raíz, /preview/, etc).
 const ASSETS_BASE = new URL('../../', import.meta.url).href;
 function assetUrl(relPath) {
-  return relPath ? ASSETS_BASE + relPath : '';
+  if (!relPath) return '';
+  return /^https?:\/\//.test(relPath) ? relPath : ASSETS_BASE + relPath;
 }
 
 const BUCKET_LABELS = {
@@ -54,31 +53,18 @@ function nextSession(activity) {
 // ---------------------------------------------------------------------------
 // Estado global (fetch una sola vez, se reusa entre vistas)
 // ---------------------------------------------------------------------------
-const state = { content: {}, categories: [], categoriesById: {}, activities: [], posts: [], dailyText: null };
+const state = { content: {}, categories: [], categoriesById: {}, activities: [], locationsById: {}, posts: [], dailyText: null };
 
 async function loadData() {
-  const [
-    { data: content, error: e1 },
-    { data: categories, error: e2 },
-    { data: activities, error: e3 },
-    { data: posts, error: e4 },
-    { data: dailyTexts, error: e5 },
-  ] = await Promise.all([
-    sb.from('site_content').select('key,value'),
-    sb.from('categories').select('*').eq('visible', true).order('sort_order'),
-    sb.from('activities').select('*, sessions(*)').eq('visible', true),
-    sb.from('posts').select('*').eq('visible', true).order('published_at', { ascending: false }).limit(3),
-    sb.from('daily_texts').select('*').order('date', { ascending: false }).limit(1),
-  ]);
-  const err = e1 || e2 || e3 || e4 || e5;
-  if (err) throw err;
-
-  state.content = Object.fromEntries((content || []).map((c) => [c.key, c.value]));
-  state.categories = categories || [];
+  const data = await api('public');
+  state.content = data.content || {};
+  state.categories = data.categories || [];
   state.categoriesById = Object.fromEntries(state.categories.map((c) => [c.id, c]));
-  state.activities = activities || [];
-  state.posts = posts || [];
-  state.dailyText = (dailyTexts && dailyTexts[0]) || null;
+  state.activities = data.activities || [];
+  // Solo nombres: la dirección real nunca viene en la API pública.
+  state.locationsById = Object.fromEntries((data.locations || []).map((l) => [l.id, l.name]));
+  state.posts = data.posts || [];
+  state.dailyText = data.daily_text || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -323,14 +309,7 @@ async function renderActividad(id) {
     return;
   }
   const category = state.categoriesById[activity.category_id];
-  view.innerHTML = `<p class="loading-note">Cargando…</p>`;
-
-  const locationIds = [...new Set((activity.sessions || []).map((s) => s.location_id).filter(Boolean))];
-  let locationsById = {};
-  if (locationIds.length) {
-    const { data: locs } = await sb.from('locations_public').select('id,name').in('id', locationIds);
-    locationsById = Object.fromEntries((locs || []).map((l) => [l.id, l.name]));
-  }
+  const locationsById = state.locationsById;
 
   const sessions = [...(activity.sessions || [])].sort((a, b) => {
     const da = a.date || '9999-' + WEEKDAY_ORDER.indexOf(a.weekday);
