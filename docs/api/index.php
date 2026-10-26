@@ -2,6 +2,8 @@
 // poloniapp — API propia (PHP + MySQL), reemplaza a Supabase.
 //
 // Público:   GET  ?action=public         todo lo que necesita el sitio en una sola llamada
+//            GET  ?action=prayer         "Para rezar hoy" (títulos del día de opusdei.org)
+//            GET  ?action=push_key|push_message   POST ?action=subscribe|unsubscribe
 //            GET  ?action=status         ¿hay sesión de admin? ¿falta crear el primer admin?
 // Admin:     POST ?action=setup          crea las tablas + el primer admin (solo si no hay ninguno)
 //            POST ?action=login|logout
@@ -10,11 +12,18 @@
 //            POST ?action=delete&table=X
 //            POST ?action=upload         imagen (multipart, campo "file") -> uploads/
 //            POST ?action=admin_add|admin_delete|password   gestión de administradores
+//            GET  ?action=prayer_admin|stats   POST ?action=prayer_refresh|prayer_override
 //
 // Las credenciales de la base viven en config.php, que genera el workflow de deploy desde los
 // GitHub Secrets (nunca va en el repo). Ver config.sample.php.
 
 declare(strict_types=1);
+
+date_default_timezone_set('America/Santiago');
+
+require __DIR__ . '/_lib/migrations.php';
+require __DIR__ . '/_lib/prayer.php';
+require __DIR__ . '/_lib/push.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -25,10 +34,8 @@ const TABLES = [
     'site_content' => ['pk' => 'key', 'cols' => ['value'], 'order' => 'section, `key`'],
     'categories' => ['pk' => 'id', 'cols' => ['slug', 'name', 'description', 'sort_order', 'bucket', 'visible'], 'order' => 'sort_order'],
     'locations' => ['pk' => 'id', 'cols' => ['name', 'address'], 'order' => 'name'],
-    'activities' => ['pk' => 'id', 'cols' => ['category_id', 'title', 'description', 'format', 'photo_url', 'visible', 'contact_name', 'contact_phone'], 'order' => 'title'],
+    'activities' => ['pk' => 'id', 'cols' => ['category_id', 'title', 'description', 'format', 'photo_url', 'visible', 'contact_name', 'contact_phone', 'registration_whatsapp', 'registration_url'], 'order' => 'title'],
     'sessions' => ['pk' => 'id', 'cols' => ['activity_id', 'date', 'weekday', 'time_start', 'time_end', 'topic', 'speaker', 'location_id', 'price'], 'order' => 'date, time_start'],
-    'posts' => ['pk' => 'id', 'cols' => ['title', 'image_url', 'external_url', 'published_at', 'source', 'visible'], 'order' => 'published_at IS NULL DESC, published_at DESC, created_at DESC'],
-    'daily_texts' => ['pk' => 'id', 'cols' => ['date', 'title', 'excerpt', 'external_url'], 'order' => 'date DESC'],
 ];
 
 const UPLOAD_TYPES = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
@@ -70,7 +77,7 @@ function db(): PDO
         );
     } catch (PDOException $e) {
         error_log('[poloniapp api] ' . $e->getMessage());
-        throw new ApiError('No se pudo conectar a la base de datos MySQL (revisá los secrets DB_* del deploy).', 500);
+        throw new ApiError('No se pudo conectar a la base de datos MySQL (revisa los secrets DB_* del deploy).', 500);
     }
     return $pdo;
 }
@@ -126,7 +133,7 @@ function require_admin(): array
 {
     $admin = current_admin();
     if (!$admin) {
-        throw new ApiError('Tenés que iniciar sesión.', 401);
+        throw new ApiError('Debes iniciar sesión.', 401);
     }
     return $admin;
 }
@@ -164,6 +171,18 @@ function install(): void
     }
 }
 
+/** Conecta y aplica migraciones pendientes (una vez por request). */
+function ensure_schema(): void
+{
+    static $done = false;
+    if (!$done) {
+        $done = true;
+        if (is_installed()) {
+            migrate();
+        }
+    }
+}
+
 function needs_setup(): bool
 {
     return !is_installed() || (int) db()->query('SELECT COUNT(*) FROM admins')->fetchColumn() === 0;
@@ -191,15 +210,12 @@ function public_payload(): array
     foreach ($pdo->query('SELECT `key`, value FROM site_content') as $row) {
         $content[$row['key']] = $row['value'];
     }
-    $daily = $pdo->query('SELECT * FROM daily_texts ORDER BY date DESC LIMIT 1')->fetch();
     return [
         'content' => $content,
         'categories' => $pdo->query('SELECT * FROM categories WHERE visible = 1 ORDER BY sort_order')->fetchAll(),
         'activities' => attach_sessions($pdo->query('SELECT * FROM activities WHERE visible = 1')->fetchAll()),
         // Solo el nombre: la dirección real nunca sale por la API pública.
         'locations' => $pdo->query('SELECT id, name FROM locations')->fetchAll(),
-        'posts' => $pdo->query('SELECT * FROM posts WHERE visible = 1 ORDER BY ' . TABLES['posts']['order'] . ' LIMIT 3')->fetchAll(),
-        'daily_text' => $daily ?: null,
     ];
 }
 
@@ -248,10 +264,8 @@ function save_row(string $table, array $input, array $admin): array
     if ($table === 'site_content') {
         $values['updated_by'] = $admin['id'];
     }
-    if ($table === 'daily_texts') {
-        $values['scraped_at'] = date('Y-m-d H:i:s');
-    }
     $id = $input[$cfg['pk']] ?? null;
+    $created = false;
 
     if ($id !== null && $id !== '') {
         if (!$values) {
@@ -271,8 +285,22 @@ function save_row(string $table, array $input, array $admin): array
         $cols = implode(', ', array_map('q', array_keys($values)));
         $marks = implode(', ', array_fill(0, count($values), '?'));
         db()->prepare('INSERT INTO ' . q($table) . " ($cols) VALUES ($marks)")->execute(array_values($values));
+        $created = true;
     }
-    return [$cfg['pk'] => $id];
+    $result = [$cfg['pk'] => $id];
+
+    // Actividad nueva y visible -> notificación a todos los dispositivos suscritos.
+    if ($table === 'activities' && $created && !empty($values['visible'])) {
+        try {
+            $result['notified'] = push_send_all(
+                ['title' => 'Nueva actividad en Poloniapp', 'body' => (string) ($values['title'] ?? ''), 'url' => './#/actividad/' . $id],
+                'mailto:' . $admin['email']
+            );
+        } catch (Throwable $e) {
+            error_log('[poloniapp push] ' . $e); // la actividad ya quedó guardada aunque falle el aviso
+        }
+    }
+    return $result;
 }
 
 function delete_row(string $table, array $input): void
@@ -311,7 +339,7 @@ function upload_image(): array
     }
     $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
     if (!isset(UPLOAD_TYPES[$mime])) {
-        throw new ApiError('Formato no permitido: usá JPG, PNG, WEBP o GIF.', 400);
+        throw new ApiError('Formato no permitido: usa JPG, PNG, WEBP o GIF.', 400);
     }
     $dir = dirname(__DIR__) . '/uploads';
     if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
@@ -331,12 +359,13 @@ function upload_image(): array
 // ---------------------------------------------------------------------------
 $action = $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
-$isAdminAction = !in_array($action, ['public', 'status'], true);
+$isAdminAction = !in_array($action, ['public', 'status', 'prayer', 'push_key', 'push_message', 'subscribe', 'unsubscribe'], true);
 
 try {
     if ($method === 'POST' && ($_SERVER['HTTP_X_POLONIAPP'] ?? '') !== '1') {
         throw new ApiError('Petición no permitida.', 403);
     }
+    ensure_schema();
 
     switch ("$method $action") {
         case 'GET public':
@@ -347,8 +376,30 @@ try {
             $admin = $setup ? null : current_admin();
             respond(['needs_setup' => $setup, 'admin' => $admin ? $admin['email'] : null]);
 
+        case 'GET prayer':
+            $prayer = prayer_items();
+            foreach ($prayer['items'] as &$item) {
+                unset($item['detail'], $item['fetched_at']);
+            }
+            respond($prayer);
+
+        case 'GET push_key':
+            respond(['key' => vapid_keys()[0]]);
+
+        case 'GET push_message':
+            respond(push_message());
+
+        case 'POST subscribe':
+            push_subscribe(body());
+            respond(['ok' => true]);
+
+        case 'POST unsubscribe':
+            push_unsubscribe(body());
+            respond(['ok' => true]);
+
         case 'POST setup':
             install();
+            migrate();
             if (!needs_setup()) {
                 throw new ApiError('Ya existe un administrador.', 403);
             }
@@ -392,6 +443,23 @@ try {
             require_admin();
             respond(upload_image());
 
+        case 'GET prayer_admin':
+            require_admin();
+            respond(prayer_items());
+
+        case 'GET stats':
+            require_admin();
+            respond(['subscribers' => (int) db()->query('SELECT COUNT(*) FROM push_subscriptions')->fetchColumn()]);
+
+        case 'POST prayer_refresh':
+            require_admin();
+            respond(prayer_items(true));
+
+        case 'POST prayer_override':
+            require_admin();
+            prayer_override(body());
+            respond(prayer_items());
+
         case 'POST admin_add':
             require_admin();
             add_admin(body());
@@ -401,7 +469,7 @@ try {
             $admin = require_admin();
             $id = (string) (body()['id'] ?? '');
             if ($id === $admin['id']) {
-                throw new ApiError('No podés borrar tu propia cuenta.', 400);
+                throw new ApiError('No puedes borrar tu propia cuenta.', 400);
             }
             db()->prepare('DELETE FROM admins WHERE id = ?')->execute([$id]);
             respond(['ok' => true]);
@@ -433,7 +501,7 @@ try {
     } elseif ($info === 1062) {
         respond(['error' => 'Ya existe otro registro con ese mismo valor (ej. la misma URL o fecha).'], 409);
     } elseif (in_array($info, [3819, 4025], true)) {
-        respond(['error' => 'Datos inválidos: revisá los campos obligatorios (ej. una sesión necesita fecha o día recurrente).'], 400);
+        respond(['error' => 'Datos inválidos: revisa los campos obligatorios (ej. una sesión necesita fecha o día recurrente).'], 400);
     }
     error_log('[poloniapp api] ' . $e);
     respond(['error' => $isAdminAction ? $e->getMessage() : 'Error interno del servidor.'], 500);

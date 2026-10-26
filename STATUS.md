@@ -9,7 +9,7 @@
 | https://github.com/mfueniz/poloniapp | Repo del código |
 | https://poloniasub35.setmore.com | Sistema de reservas de confesiones (externo al proyecto, solo enlazado) |
 
-**Fase:** iteración-v1 → backend/data-driven — **swap a producción hecho (2026-09-05)**: Fases 1, 2 (a+b+c), 3 y 5 en la raíz; pendiente Fase 4 (inscripciones, bloqueada por feedback de otros admins, reunión ~2026-09-13)
+**Fase:** en producción en poloniapp.cl con backend propio (MySQL + PHP). Última ronda: 2026-10-26 (ver `DECISIONS.md`, Ronda 9).
 **Madurez:** 4/5
 
 ## Qué es
@@ -25,6 +25,9 @@ Web app informativa (MVP) para un centro cultural del O. en Las Condes (Polonia 
   - Schema y contenido inicial: `docs/api/_lib/schema.sql` y `seed.sql` (traducción a MySQL de `supabase/`). Se corren solos la primera vez que se entra a `/admin/` y se crea el primer administrador.
   - Imágenes subidas desde el panel: `docs/uploads/` en el servidor (no están en el repo; respaldarlas desde cPanel).
   - Administradores: se agregan/quitan y se cambia la contraseña desde la pestaña Administradores del panel. Reset manual sin acceso al panel: borrar la fila en `admins` desde phpMyAdmin; si la tabla queda vacía, `/admin/` vuelve a ofrecer crear el primer admin.
+- **Migraciones:** `docs/api/_lib/migrations.php` (la versión aplicada queda en `settings.schema_version`).
+- **Para rezar hoy:** `docs/api/_lib/prayer.php` + `.github/workflows/para-rezar-hoy.yml` (lectura diaria). Estado y títulos manuales: pestaña "Para rezar hoy" del panel.
+- **App + notificaciones:** `docs/manifest.json`, `docs/sw.js`, `docs/assets/js/pwa.js`, `docs/api/_lib/push.php` (claves VAPID generadas solas, guardadas en `settings`).
 - `supabase/`: schema original de Postgres, solo como referencia histórica.
 - **Bundle viejo (respaldo):** `docs/legacy/index.html`.
 

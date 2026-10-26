@@ -4,6 +4,38 @@ Log vivo de decisiones de diseño, UX/UI y estructura de contenido tomadas en se
 
 ---
 
+## 2026-10-26 — Ronda 9: hosting propio, nueva identidad, app instalable y "Para rezar hoy"
+
+### Infraestructura
+- Sitio en `poloniapp.cl` (hosting Spaceship, cPanel). Supabase se reemplazó por MySQL + API PHP propia en el mismo servidor (`docs/api/`). Cambios de base vía migraciones versionadas en `docs/api/_lib/migrations.php`, que la API aplica sola.
+
+### Identidad visual
+- Logo (`assets/img/poloniapp-logo.svg`) y favicon (`assets/img/favicon.svg`) nuevos; reemplazan el símbolo de anillos y Caprasimo/Figtree.
+- Paleta: #42576B pizarra (marca, títulos), #99251F vino (botones, links), #85BAEA celeste y #EB271C rojo (solo acentos: no pasan contraste para texto chico), #767865 oliva (texto secundario). Fondo blanco.
+- Tipografía: Google Sans (variable), alojada en el servidor (`assets/fonts/`).
+- Todo el texto del sitio, del panel y del manual pasa a español neutro de Chile ("tú"), sin voseo.
+
+### Estructura de la Home
+- Frase + bajada → banner de la app (solo Android/iOS, fuera de la app instalada) → Actividades (filtro "Todas" por defecto) → Para rezar hoy → Quiénes somos.
+- Actividades en la Home: solo próximas, la más cercana primero; las semanales (círculos) aparecen únicamente el día que corresponden. Máximo 6, con "Ver todas".
+- Detalle de actividad: "Volver" regresa a donde estaba la persona (con su posición de scroll); "Ver todo: {categoría}" a la derecha.
+- Menú hamburguesa en el header con las mismas 3 secciones de la barra inferior (se mantienen ambos).
+
+### Publicaciones de O. → "Para rezar hoy"
+- Se quita Publicaciones (y el Texto diario manual) del sitio y del panel. Lo reemplaza "Para rezar hoy": los títulos del día de opusdei.org/es-cl/gospel, /meditation y /dailytext, cada uno abre la página en pestaña nueva.
+- Automático: el servidor lee las 3 páginas una vez al día (identificándose como PoloniappBot, sin evadir protecciones; ver Ronda 7 sobre Cloudflare). Si no puede, muestra un título con la fecha y reintenta cada 3 horas; el link siempre funciona. Un admin puede escribir los títulos del día a mano. GitHub Actions (`para-rezar-hoy.yml`) dispara la lectura cada madrugada.
+
+### App instalable + notificaciones
+- PWA (`manifest.json`, `sw.js`). Android: botón que abre el diálogo de instalación del navegador y luego pide notificaciones. iOS no permite instalar desde un botón: el banner muestra los pasos de Safari; las notificaciones se activan dentro de la app instalada (iOS 16.4+).
+- El banner no aparece en computador, dentro de la app ya instalada (salvo para activar notificaciones si falta) ni en Android si la app ya está instalada; se puede cerrar (vuelve en 14 días).
+- Notificación push (Web Push/VAPID, sin librerías) al crear una actividad visible.
+
+### Actividades
+- Inscripción opcional por WhatsApp (se genera el link wa.me con un mensaje) o por link externo; sin ninguno, no hay botón. Reemplaza el flujo propio de inscripción de la Fase 4 (se quitó la pestaña Inscripciones).
+- Círculos vigentes (7, semanales; el responsable va como "Con …" en la sesión). Ubicaciones nuevas: Uandes y CLA (falta la dirección real de CLA); "Las Condes" pasa a llamarse "Polonia".
+
+---
+
 ## 2026-08-30 — Ronda 8: ejecución Fase 1 + 2a (Supabase + Home data-driven)
 
 ### Fase 1 — Supabase

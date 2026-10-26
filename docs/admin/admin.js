@@ -94,9 +94,7 @@ function loadTab(tab) {
   if (tab === 'categorias') return loadCategorias();
   if (tab === 'ubicaciones') return loadUbicaciones();
   if (tab === 'actividades') return loadActividades();
-  if (tab === 'publicaciones') return loadPublicaciones();
-  if (tab === 'textodiario') return loadTextoDiario();
-  if (tab === 'inscripciones') return loadInscripciones();
+  if (tab === 'rezar') return loadRezar();
   if (tab === 'admins') return loadAdmins();
   document.getElementById('tab-content').innerHTML = `<p class="coming-soon">Próximamente.</p>`;
 }
@@ -157,7 +155,7 @@ async function loadContenido() {
                    </div>`
                 : ''
             }
-            <textarea${isImage ? ' placeholder="o pegá una URL acá"' : ''}>${esc(r.value)}</textarea>
+            <textarea${isImage ? ' placeholder="o pega una URL aquí"' : ''}>${esc(r.value)}</textarea>
             <div class="save-row">
               <button class="save">Guardar</button>
               <span class="status"></span>
@@ -364,7 +362,7 @@ function sessionRowHtml(s, activityId, locOptions) {
       </div>
       <div class="crud-row">
         <div><label>Tema</label><input type="text" class="s-topic" value="${esc(s?.topic)}"></div>
-        <div><label>Expositor</label><input type="text" class="s-speaker" value="${esc(s?.speaker)}"></div>
+        <div><label>Expositor / responsable</label><input type="text" class="s-speaker" value="${esc(s?.speaker)}"></div>
         <div style="flex:0 0 140px;"><label>Precio</label><input type="text" class="s-price" value="${esc(s?.price)}" placeholder="ej. $10.000"></div>
         <div style="flex:0 0 160px;"><label>Ubicación</label><select class="s-location">${locOptions(s)}</select></div>
       </div>
@@ -423,13 +421,14 @@ async function loadActividades() {
               <input type="file" accept="image/*" class="image-input">
               <span class="status upload-status"></span>
             </div>
-            <input type="text" class="f-photo" value="${esc(a?.photo_url)}" placeholder="o pegá un path/URL (ej. assets/activities/foto.jpg)">
+            <input type="text" class="f-photo" value="${esc(a?.photo_url)}" placeholder="o pega una ruta/URL (ej. assets/activities/foto.jpg)">
           </div>
         </div>
         <div class="crud-row">
-          <div><label>Contacto — nombre (opcional, si no usa el WhatsApp general)</label><input type="text" class="f-contact-name" value="${esc(a?.contact_name)}"></div>
+          <div><label>Contacto para el botón de WhatsApp — nombre (opcional; si no, se usa el número general)</label><input type="text" class="f-contact-name" value="${esc(a?.contact_name)}"></div>
           <div><label>Contacto — teléfono</label><input type="text" class="f-contact-phone" value="${esc(a?.contact_phone)}" placeholder="+569..."></div>
         </div>
+        ${registrationBlockHtml(a)}
         <div class="crud-actions">
           <button class="save">${a ? 'Guardar' : 'Crear actividad'}</button>
           ${a ? `<button class="delete">Borrar</button>` : ''}
@@ -447,8 +446,16 @@ async function loadActividades() {
       </div>`;
   }
 
+  const { data: stats } = await attempt(api('stats'));
   container.innerHTML =
-    activities.map(activityCardHtml).join('') + `<h3 style="font-size:0.9rem;margin:24px 0 10px;">Nueva actividad</h3>` + activityCardHtml(null);
+    (flashMessage ? `<p class="flash">${esc(flashMessage)}</p>` : '') +
+    `<p class="tab-note">Al crear una actividad visible se envía una notificación a ${
+      stats ? `los <strong>${stats.subscribers}</strong> dispositivos` : 'los dispositivos'
+    } que activaron las notificaciones de Poloniapp.</p>` +
+    activities.map(activityCardHtml).join('') +
+    `<h3 style="font-size:0.9rem;margin:24px 0 10px;">Nueva actividad</h3>` +
+    activityCardHtml(null);
+  flashMessage = '';
 
   wireActivityCards(container, { locOptions });
 }
@@ -505,7 +512,7 @@ function wireActivityCards(container, { locOptions }) {
     const id = card.dataset.id;
     const saveBtn = card.querySelector('.save');
     const deleteBtn = card.querySelector('.delete');
-    const status = card.querySelector('.status');
+    const status = card.querySelector('.crud-actions .status');
 
     const fileInput = card.querySelector('.image-input');
     const photoField = card.querySelector('.f-photo');
@@ -544,13 +551,24 @@ function wireActivityCards(container, { locOptions }) {
         contact_name: card.querySelector('.f-contact-name').value.trim() || null,
         contact_phone: card.querySelector('.f-contact-phone').value.trim() || null,
       };
+      const registration = readRegistration(card);
+      if (registration.error) {
+        status.textContent = registration.error;
+        return;
+      }
+      Object.assign(payload, registration.values);
       saveBtn.disabled = true;
       status.textContent = 'Guardando…';
-      const { error } = await db.save('activities', { id, ...payload });
+      const { data, error } = await db.save('activities', { id, ...payload });
       saveBtn.disabled = false;
       if (error) {
         status.textContent = 'Error: ' + error.message;
       } else {
+        if (!id) {
+          flashMessage = data?.notified
+            ? `Actividad creada. Se envió una notificación a ${data.notified} dispositivo${data.notified > 1 ? 's' : ''}.`
+            : 'Actividad creada.';
+        }
         loadActividades();
       }
     });
@@ -566,6 +584,7 @@ function wireActivityCards(container, { locOptions }) {
     });
 
     card.querySelectorAll('.session-crud-row').forEach((row) => wireSessionRow(row, locOptions));
+    wireRegistration(card);
 
     card.querySelector('.add-session')?.addEventListener('click', () => {
       const list = card.querySelector('.sessions-list');
@@ -579,230 +598,132 @@ function wireActivityCards(container, { locOptions }) {
 }
 
 // ---------------------------------------------------------------------------
-// Tab: Publicaciones (CRUD — el scraper de la Fase 5 también va a escribir acá)
+// Inscripción de una actividad: por WhatsApp (se genera el link wa.me) o por un link externo.
+// Opcional: si no se completa, el sitio no muestra el botón "Inscríbete aquí".
 // ---------------------------------------------------------------------------
-function postCardHtml(p) {
+let flashMessage = '';
+
+function registrationBlockHtml(a) {
+  const mode = a?.registration_whatsapp ? 'whatsapp' : a?.registration_url ? 'link' : 'none';
+  const name = `reg-${a?.id || 'new'}`;
+  const option = (value, label) =>
+    `<label><input type="radio" name="${name}" value="${value}" ${mode === value ? 'checked' : ''}> ${label}</label>`;
   return `
-    <div class="crud-card" data-id="${p?.id || ''}">
-      <div class="crud-row">
-        <div><label>Título</label><input type="text" class="f-title" value="${esc(p?.title)}"></div>
-        <div style="flex:0 0 150px;"><label>Publicado</label><input type="date" class="f-published" value="${p?.published_at || ''}"></div>
-        <div class="crud-check"><label><input type="checkbox" class="f-visible" ${!p || p.visible ? 'checked' : ''}> visible</label></div>
+    <div class="reg-block">
+      <p class="reg-title">Inscripción <span>(opcional)</span></p>
+      <div class="reg-options">
+        ${option('none', 'Sin inscripción')}
+        ${option('whatsapp', 'Por WhatsApp')}
+        ${option('link', 'Por link')}
       </div>
-      <div class="crud-row">
-        <div><label>URL externa (opusdei.org)</label><input type="text" class="f-url" value="${esc(p?.external_url)}" placeholder="https://opusdei.org/..."></div>
-      </div>
-      <div class="crud-row">
+      <div class="crud-row reg-field" data-for="whatsapp" ${mode === 'whatsapp' ? '' : 'hidden'}>
         <div>
-          <label>Foto</label>
-          <div class="image-field">
-            <img class="image-preview" src="${esc(previewSrc(p?.image_url))}" ${p?.image_url ? '' : 'hidden'}>
-            <input type="file" accept="image/*" class="image-input">
-            <span class="status upload-status"></span>
-          </div>
-          <input type="text" class="f-image" value="${esc(p?.image_url)}" placeholder="o pegá un path/URL">
+          <label>Número de WhatsApp para inscribirse</label>
+          <input type="text" class="f-reg-whatsapp" value="${esc(a?.registration_whatsapp)}" placeholder="+56 9 1234 5678">
+          <p class="reg-preview"></p>
         </div>
       </div>
-      <div class="crud-actions">
-        <button class="save">${p ? 'Guardar' : 'Crear publicación'}</button>
-        ${p ? `<button class="delete">Borrar</button>` : ''}
-        <span class="status"></span>
+      <div class="crud-row reg-field" data-for="link" ${mode === 'link' ? '' : 'hidden'}>
+        <div>
+          <label>Link de inscripción (formulario, página, etc.)</label>
+          <input type="text" class="f-reg-url" value="${esc(a?.registration_url)}" placeholder="https://...">
+        </div>
       </div>
     </div>`;
 }
 
-async function loadPublicaciones() {
-  const container = document.getElementById('tab-content');
-  container.innerHTML = `<p class="loading-note">Cargando…</p>`;
+function wireRegistration(card) {
+  const block = card.querySelector('.reg-block');
+  if (!block) return;
+  const phone = block.querySelector('.f-reg-whatsapp');
+  const preview = block.querySelector('.reg-preview');
+  const update = () => {
+    const mode = block.querySelector('input[type=radio]:checked')?.value || 'none';
+    block.querySelectorAll('.reg-field').forEach((f) => (f.hidden = f.dataset.for !== mode));
+    const digits = phone.value.replace(/\D/g, '');
+    preview.innerHTML = digits
+      ? `Link generado: <a href="https://wa.me/${digits}" target="_blank" rel="noopener">wa.me/${digits}</a>`
+      : '';
+  };
+  block.addEventListener('change', update);
+  phone.addEventListener('input', update);
+  update();
+}
 
-  const { data, error } = await db.list('posts');
+function readRegistration(card) {
+  const mode = card.querySelector('.reg-block input[type=radio]:checked')?.value || 'none';
+  const phone = card.querySelector('.f-reg-whatsapp').value.trim();
+  const url = card.querySelector('.f-reg-url').value.trim();
+  if (mode === 'whatsapp') {
+    if (phone.replace(/\D/g, '').length < 8) return { error: 'Revisa el número de WhatsApp (con código de país, ej. +56 9…).' };
+    return { values: { registration_whatsapp: phone, registration_url: null } };
+  }
+  if (mode === 'link') {
+    if (!/^https?:\/\/\S+$/i.test(url)) return { error: 'El link de inscripción debe empezar con https://' };
+    return { values: { registration_whatsapp: null, registration_url: url } };
+  }
+  return { values: { registration_whatsapp: null, registration_url: null } };
+}
+
+// ---------------------------------------------------------------------------
+// Tab: Para rezar hoy (automático desde opusdei.org; los títulos se pueden escribir a mano)
+// ---------------------------------------------------------------------------
+const PRAYER_LABELS = { gospel: 'Evangelio del día', meditation: 'Meditación del día', dailytext: 'Texto del día' };
+
+async function loadRezar(prefetched) {
+  const container = document.getElementById('tab-content');
+  if (!prefetched) container.innerHTML = `<p class="loading-note">Consultando…</p>`;
+  const { data, error } = prefetched ? { data: prefetched, error: null } : await attempt(api('prayer_admin'));
   if (error) {
     container.innerHTML = `<p class="loading-note">Error: ${esc(error.message)}</p>`;
     return;
   }
-
-  container.innerHTML =
-    data.map(postCardHtml).join('') + `<h3 style="font-size:0.9rem;margin:24px 0 10px;">Nueva publicación</h3>` + postCardHtml(null);
-
-  container.querySelectorAll('.crud-card').forEach((card) => {
-    const id = card.dataset.id;
-    const saveBtn = card.querySelector('.save');
-    const deleteBtn = card.querySelector('.delete');
-    const status = card.querySelector('.status');
-    const imageField = card.querySelector('.f-image');
-
-    const fileInput = card.querySelector('.image-input');
-    if (fileInput) {
-      const preview = card.querySelector('.image-preview');
-      const uploadStatus = card.querySelector('.upload-status');
-      fileInput.addEventListener('change', async () => {
-        const file = fileInput.files[0];
-        if (!file) return;
-        uploadStatus.textContent = 'Subiendo…';
-        try {
-          const url = await uploadImage(file);
-          imageField.value = url;
-          preview.src = previewSrc(url);
-          preview.hidden = false;
-          uploadStatus.textContent = 'Subida ✓ — falta Guardar';
-        } catch (err) {
-          uploadStatus.textContent = 'Error: ' + err.message;
-        }
-      });
-    }
-
-    saveBtn.addEventListener('click', async () => {
-      const title = card.querySelector('.f-title').value.trim();
-      const externalUrl = card.querySelector('.f-url').value.trim();
-      if (!title || !externalUrl) {
-        status.textContent = 'Título y URL externa son obligatorios.';
-        return;
-      }
-      const payload = {
-        title,
-        external_url: externalUrl,
-        published_at: card.querySelector('.f-published').value || null,
-        image_url: imageField.value.trim() || null,
-        visible: card.querySelector('.f-visible').checked,
-      };
-      saveBtn.disabled = true;
-      status.textContent = 'Guardando…';
-      const { error } = await db.save('posts', { id, ...payload });
-      saveBtn.disabled = false;
-      if (error) {
-        status.textContent = 'Error: ' + error.message;
-      } else {
-        loadPublicaciones();
-      }
-    });
-
-    deleteBtn?.addEventListener('click', async () => {
-      if (!confirm('¿Borrar esta publicación?')) return;
-      const { error } = await db.remove('posts', id);
-      if (error) {
-        status.textContent = 'Error: ' + error.message;
-      } else {
-        loadPublicaciones();
-      }
-    });
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Tab: Texto diario (carga manual — opusdei.org bloquea scraping con Cloudflare,
-// ver DECISIONS.md. Mismo patrón que Publicaciones: alguien pega el texto del día a mano.)
-// ---------------------------------------------------------------------------
-function dailyTextCardHtml(d) {
-  return `
-    <div class="crud-card" data-id="${d?.id || ''}">
-      <div class="crud-row">
-        <div style="flex:0 0 150px;"><label>Fecha</label><input type="date" class="f-date" value="${d?.date || ''}"></div>
-        <div><label>Título</label><input type="text" class="f-title" value="${esc(d?.title)}"></div>
-      </div>
-      <div class="crud-row">
-        <div><label>Excerpt</label><textarea class="f-excerpt">${esc(d?.excerpt)}</textarea></div>
-      </div>
-      <div class="crud-row">
-        <div><label>URL en opusdei.org</label><input type="text" class="f-url" value="${esc(d?.external_url)}" placeholder="https://opusdei.org/es-cl/dailytext/..."></div>
-      </div>
-      <div class="crud-actions">
-        <button class="save">${d ? 'Guardar' : 'Cargar texto del día'}</button>
-        ${d ? `<button class="delete">Borrar</button>` : ''}
-        <span class="status"></span>
-      </div>
-    </div>`;
-}
-
-async function loadTextoDiario() {
-  const container = document.getElementById('tab-content');
-  container.innerHTML = `<p class="loading-note">Cargando…</p>`;
-
-  const { data, error } = await db.list('daily_texts');
-  if (error) {
-    container.innerHTML = `<p class="loading-note">Error: ${esc(error.message)}</p>`;
-    return;
-  }
-
-  container.innerHTML =
-    `<p class="loading-note" style="margin-bottom:16px;">opusdei.org bloquea el scraping automático (Cloudflare) — el texto del día se carga a mano acá, tarda 1 minuto: copiás título, extracto y link desde <a href="https://opusdei.org/es-cl/dailytext" target="_blank" rel="noopener">opusdei.org/es-cl/dailytext</a>.</p>` +
-    data.map(dailyTextCardHtml).join('') +
-    `<h3 style="font-size:0.9rem;margin:24px 0 10px;">Cargar texto de hoy</h3>` +
-    dailyTextCardHtml(null);
-
-  container.querySelectorAll('.crud-card').forEach((card) => {
-    const id = card.dataset.id;
-    const saveBtn = card.querySelector('.save');
-    const deleteBtn = card.querySelector('.delete');
-    const status = card.querySelector('.status');
-
-    saveBtn.addEventListener('click', async () => {
-      const date = card.querySelector('.f-date').value;
-      const title = card.querySelector('.f-title').value.trim();
-      const excerpt = card.querySelector('.f-excerpt').value.trim();
-      const externalUrl = card.querySelector('.f-url').value.trim();
-      if (!date || !title || !excerpt || !externalUrl) {
-        status.textContent = 'Todos los campos son obligatorios.';
-        return;
-      }
-      saveBtn.disabled = true;
-      status.textContent = 'Guardando…';
-      const { error } = await db.save('daily_texts', { id, date, title, excerpt, external_url: externalUrl });
-      saveBtn.disabled = false;
-      if (error) {
-        status.textContent = 'Error: ' + error.message;
-      } else {
-        loadTextoDiario();
-      }
-    });
-
-    deleteBtn?.addEventListener('click', async () => {
-      if (!confirm('¿Borrar este texto diario?')) return;
-      const { error } = await db.remove('daily_texts', id);
-      if (error) {
-        status.textContent = 'Error: ' + error.message;
-      } else {
-        loadTextoDiario();
-      }
-    });
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Tab: Inscripciones (solo lectura — quién se anotó a qué sesión)
-// ---------------------------------------------------------------------------
-async function loadInscripciones() {
-  const container = document.getElementById('tab-content');
-  container.innerHTML = `<p class="loading-note">Cargando…</p>`;
-
-  const { data, error } = await db.list('registrations');
-  if (error) {
-    container.innerHTML = `<p class="loading-note">Error: ${esc(error.message)}</p>`;
-    return;
-  }
-
-  if (!data.length) {
-    container.innerHTML = `<p class="loading-note">Todavía no hay inscripciones — van a aparecer acá cuando alguien se inscriba desde el sitio (Fase 4, pendiente de construir).</p>`;
-    return;
-  }
+  const sourceLabel = (i) =>
+    i.source === 'auto'
+      ? '<span class="badge ok">Automático · leído de opusdei.org</span>'
+      : i.source === 'manual'
+      ? '<span class="badge manual">Escrito a mano</span>'
+      : `<span class="badge warn">Título con la fecha · ${esc(i.detail || 'sin lectura todavía')}</span>`;
 
   container.innerHTML = `
-    <table class="data-table">
-      <tr><th>Fecha</th><th>Nombre</th><th>Email</th><th>Teléfono</th><th>Actividad</th><th>Sesión</th></tr>
-      ${data
-        .map((r) => {
-          const when = r.session_date || r.session_weekday || '';
-          return `
-        <tr>
-          <td>${esc(new Date(r.created_at).toLocaleDateString('es-CL'))}</td>
-          <td>${esc(r.name)}</td>
-          <td>${esc(r.email)}</td>
-          <td>${esc(r.phone)}</td>
-          <td>${esc(r.activity_title)}</td>
-          <td>${esc(when)}</td>
-        </tr>`;
-        })
-        .join('')}
-    </table>`;
+    <p class="tab-note">Cada día el sitio lee de opusdei.org el título del Evangelio, la meditación y el texto del día, y cada título lleva a su página.
+    Si opusdei.org no permite la lectura automática, se muestra un título con la fecha (el link sigue funcionando) y se vuelve a intentar cada 3 horas.
+    Si quieres, puedes escribir aquí los títulos de hoy; al día siguiente vuelve a ser automático.</p>
+    ${data.items
+      .map(
+        (i) => `
+      <div class="crud-card" data-kind="${i.kind}">
+        <p class="reg-title">${PRAYER_LABELS[i.kind]} · <a href="${esc(i.url)}" target="_blank" rel="noopener">abrir página</a></p>
+        <p style="margin:0 0 8px;font-weight:600;">${esc(i.title)}</p>
+        ${sourceLabel(i)}
+        <div class="crud-row" style="margin-top:12px;">
+          <div><label>Título escrito a mano para hoy (vacío = automático)</label>
+          <input type="text" class="f-manual" value="${i.source === 'manual' ? esc(i.title) : ''}"></div>
+        </div>
+      </div>`
+      )
+      .join('')}
+    <div class="crud-actions">
+      <button class="save" id="prayer-save">Guardar títulos de hoy</button>
+      <button class="delete" id="prayer-refresh" style="color:var(--color-primary);border-color:var(--color-border);">Volver a consultar opusdei.org</button>
+      <span class="status" id="prayer-status"></span>
+    </div>`;
+
+  const status = document.getElementById('prayer-status');
+  document.getElementById('prayer-save').addEventListener('click', async () => {
+    const body = {};
+    container.querySelectorAll('.crud-card[data-kind]').forEach((c) => (body[c.dataset.kind] = c.querySelector('.f-manual').value));
+    status.textContent = 'Guardando…';
+    const { data: res, error: err } = await attempt(api('prayer_override', { method: 'POST', body }));
+    if (err) status.textContent = 'Error: ' + err.message;
+    else loadRezar(res);
+  });
+  document.getElementById('prayer-refresh').addEventListener('click', async () => {
+    status.textContent = 'Consultando opusdei.org…';
+    const { data: res, error: err } = await attempt(api('prayer_refresh', { method: 'POST' }));
+    if (err) status.textContent = 'Error: ' + err.message;
+    else loadRezar(res);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -826,7 +747,7 @@ async function loadAdmins() {
       <div class="crud-card" data-id="${a.id}">
         <div class="crud-actions">
           <strong>${esc(a.email)}</strong>
-          ${a.email === me ? '<span class="status">(vos)</span>' : '<button class="delete">Quitar acceso</button><span class="status"></span>'}
+          ${a.email === me ? '<span class="status">(tú)</span>' : '<button class="delete">Quitar acceso</button><span class="status"></span>'}
         </div>
       </div>`
       )
