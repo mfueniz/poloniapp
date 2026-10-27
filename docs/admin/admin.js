@@ -364,7 +364,7 @@ async function loadActividades() {
         <div class="crud-actions form-actions">
           <button class="save">${a ? 'Guardar' : 'Crear actividad'}</button>
           ${a ? `<button class="delete">Borrar actividad</button>` : ''}
-          ${a?.slug ? `<a href="../#/actividad/${esc(a.slug)}" target="_blank" rel="noopener" class="view-link">ver en el sitio →</a>` : ''}
+          ${a?.slug ? `<a href="/actividad/${esc(a.slug)}" target="_blank" rel="noopener" class="view-link">ver en el sitio →</a>` : ''}
           <span class="status"></span>
         </div>
       </div>`;
@@ -717,7 +717,7 @@ async function loadProyectos() {
         <div class="crud-actions" style="margin-top:14px;">
           <button class="save">${p ? 'Guardar proyecto' : 'Crear proyecto'}</button>
           ${p ? `<button class="delete">Borrar</button>` : ''}
-          ${p ? `<a href="../#/quienes-somos/proyectos/${esc(p.slug)}" target="_blank" rel="noopener" style="font-size:0.82rem;">ver página →</a>` : ''}
+          ${p ? `<a href="/quienes-somos/proyectos/${esc(p.slug)}" target="_blank" rel="noopener" style="font-size:0.82rem;">ver página →</a>` : ''}
           <span class="status"></span>
         </div>
       </div>`;

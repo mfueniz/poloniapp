@@ -319,7 +319,7 @@ function save_row(string $table, array $input, array $admin): array
         $values['updated_by'] = $admin['id'];
     }
     $id = $input[$cfg['pk']] ?? null;
-    // La URL de la actividad sale de su nombre (#/actividad/retiro-de-noviembre).
+    // La URL de la actividad sale de su nombre (/actividad/retiro-de-noviembre).
     if ($table === 'activities' && isset($values['title'])) {
         $values['slug'] = unique_slug('activities', (string) $values['title'], $id ?: null);
     }
@@ -457,7 +457,7 @@ function save_activity(array $input, array $admin): array
     if ($result['created'] && !empty($activity['visible'])) {
         try {
             $result['notified'] = push_send_all(
-                ['title' => 'Nueva actividad en Poloniapp', 'body' => (string) ($activity['title'] ?? ''), 'url' => './#/actividad/' . $result['slug']],
+                ['title' => 'Nueva actividad en Poloniapp', 'body' => (string) ($activity['title'] ?? ''), 'url' => './actividad/' . $result['slug']],
                 'mailto:' . $admin['email']
             );
         } catch (Throwable $e) {

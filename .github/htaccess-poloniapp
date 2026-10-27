@@ -1,0 +1,10 @@
+# BEGIN Poloniapp — direcciones limpias (lo agrega el deploy; el resto del archivo se conserva)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # /actividad/…, /actividades/…, /quienes-somos/… no son archivos: las entrega page.php
+  # (la misma página del sitio, con la vista previa de esa actividad o proyecto).
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(actividad|actividades|quienes-somos)(/.*)?$ page.php [L,QSA]
+</IfModule>
+# END Poloniapp

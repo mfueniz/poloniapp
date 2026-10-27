@@ -3,7 +3,7 @@
 // Home: frase + bajada → banner de la app (solo celular) → actividades próximas → Para rezar hoy.
 
 import { api } from './api.js';
-import { renderAppBanner, openNotifications } from './pwa.js?v=20261030';
+import { renderAppBanner, openNotifications } from './pwa.js?v=20261031';
 
 // Raíz real del sitio (docs/), calculada desde la ubicación de este script.
 const ASSETS_BASE = new URL('../../', import.meta.url).href;
@@ -176,9 +176,9 @@ function buttonHref(url) {
 // Header (logo + menú hamburguesa) y barra inferior: mismas 3 secciones en ambos
 // ---------------------------------------------------------------------------
 const NAV = [
-  { href: '#/', label: 'Inicio', key: 'home', icon: ICONS.home },
-  { href: '#/actividades', label: 'Actividades', key: 'actividades', icon: ICONS.calendar },
-  { href: '#/quienes-somos', label: 'Quiénes somos', key: 'quienes-somos', icon: ICONS.info },
+  { href: '/', label: 'Inicio', key: 'home', icon: ICONS.home },
+  { href: '/actividades', label: 'Actividades', key: 'actividades', icon: ICONS.calendar },
+  { href: '/quienes-somos', label: 'Quiénes somos', key: 'quienes-somos', icon: ICONS.info },
 ];
 
 const menuBtn = document.getElementById('menu-btn');
@@ -217,21 +217,42 @@ function renderChrome(activeTab) {
 let navigatedInApp = false;
 let restoreScroll = false;
 const scrollPositions = {};
-function goBack(fallbackHash) {
+function goBack(fallbackPath) {
   if (navigatedInApp && history.length > 1) {
     restoreScroll = true;
     history.back();
   } else {
-    location.hash = fallbackHash;
+    navigate(fallbackPath);
   }
 }
+
+// Direcciones limpias (poloniapp.cl/actividad/retiro-de-noviembre). Los links internos se
+// interceptan y se navega sin recargar; el servidor entrega la misma página para estas rutas
+// (ver .htaccess y page.php, que además arma la vista previa para WhatsApp/Google).
+const APP_ROUTE = /^\/(?:(?:actividad|actividades|quienes-somos)(?:\/.*)?)?$/;
+
+function navigate(path) {
+  if (path !== location.pathname) history.pushState(null, '', path);
+  navigatedInApp = true;
+  route();
+}
+
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('a[href]');
+  if (!link || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  if (link.target || link.hasAttribute('download')) return;
+  const url = new URL(link.href, location.href);
+  if (url.origin !== location.origin || !APP_ROUTE.test(url.pathname)) return;
+  e.preventDefault();
+  navigate(url.pathname);
+});
 
 // ---------------------------------------------------------------------------
 // Componentes
 // ---------------------------------------------------------------------------
-// URL de una actividad con su nombre (#/actividad/retiro-de-noviembre); el id sigue funcionando
+// URL de una actividad con su nombre (/actividad/retiro-de-noviembre); el id sigue funcionando
 // para links antiguos.
-const activityHref = (a) => `#/actividad/${encodeURIComponent(a.slug || a.id)}`;
+const activityHref = (a) => `/actividad/${encodeURIComponent(a.slug || a.id)}`;
 // Los círculos no llevan imagen: solo título y hora.
 const isCircle = (a) => state.categoriesById[a.category_id]?.slug === 'circulos';
 
@@ -356,7 +377,7 @@ async function loadPrayer() {
 // ---------------------------------------------------------------------------
 function projectTeaser(p) {
   return `
-    <a class="project-teaser" href="#/quienes-somos/proyectos/${esc(p.slug)}">
+    <a class="project-teaser" href="/quienes-somos/proyectos/${esc(p.slug)}">
       ${p.logo_url ? `<img class="pt-logo" src="${esc(assetUrl(p.logo_url))}" alt="${esc(p.title)}">` : `<p class="pt-title">${esc(p.title)}</p>`}
       ${p.tagline ? `<p class="pt-tag">${esc(p.tagline)}</p>` : ''}
       ${p.summary ? `<p class="pt-summary">${richText(p.summary, { inline: true })}</p>` : ''}
@@ -379,7 +400,7 @@ function renderHome() {
     </section>
     <nav class="chips" id="chips" aria-label="Filtrar por categoría"></nav>
     <div id="home-activities"></div>
-    <a class="see-all" href="#/actividades">Ver todas las actividades →</a>
+    <a class="see-all" href="/actividades">Ver todas las actividades →</a>
     ${prayerSection()}
     ${
       state.content['confesiones.booking_url']
@@ -399,7 +420,7 @@ function renderHome() {
     <div class="about-teaser">
       <h2>Quiénes somos</h2>
       <p>${esc(state.content['quienes_somos.teaser'])}</p>
-      <a href="#/quienes-somos">Conocer el centro →</a>
+      <a href="/quienes-somos">Conocer el centro →</a>
     </div>`;
 
   renderAppBanner(document.getElementById('app-banner-slot'));
@@ -438,7 +459,7 @@ function renderHome() {
     document.getElementById('home-activities').innerHTML =
       circlesHtml || othersHtml
         ? circlesHtml + othersHtml
-        : `<p class="empty-note">No hay actividades próximas. <a href="#/actividades">Ver todas las actividades</a></p>`;
+        : `<p class="empty-note">No hay actividades próximas. <a href="/actividades">Ver todas las actividades</a></p>`;
   }
 
   renderActivities();
@@ -470,7 +491,7 @@ function renderCategorias() {
               ? `${count} actividad${count > 1 ? 'es' : ''}`
               : 'Próximamente';
           return `
-            <a class="category-card" href="#/actividades/${c.slug}">
+            <a class="category-card" href="/actividades/${c.slug}">
               <p class="cat-name">${esc(c.name)}</p>
               <p class="cat-count">${countLabel}</p>
             </a>`;
@@ -487,7 +508,7 @@ function renderCategoria(slug) {
   const category = state.categories.find((c) => c.slug === slug);
   const view = document.getElementById('view');
   if (!category) {
-    view.innerHTML = `<p class="loading-note">Categoría no encontrada. <a href="#/actividades">Volver</a></p>`;
+    view.innerHTML = `<p class="loading-note">Categoría no encontrada. <a href="/actividades">Volver</a></p>`;
     return;
   }
   // Próximas primero (por fecha), después las que ya pasaron.
@@ -516,7 +537,7 @@ function renderCategoria(slug) {
         ? `<p class="empty-note">Todavía no hay actividades en esta categoría. Próximamente.</p>`
         : `<div class="activities-list">${list.map(activityListRow).join('')}</div>`
     }`;
-  view.querySelector('.back').addEventListener('click', () => goBack('#/actividades'));
+  view.querySelector('.back').addEventListener('click', () => goBack('/actividades'));
 }
 
 // ---------------------------------------------------------------------------
@@ -527,7 +548,7 @@ function renderActividad(id) {
   const view = document.getElementById('view');
   const activity = state.activities.find((a) => a.slug === id || a.id === id);
   if (!activity) {
-    view.innerHTML = `<p class="loading-note">Actividad no encontrada. <a href="#/actividades">Volver</a></p>`;
+    view.innerHTML = `<p class="loading-note">Actividad no encontrada. <a href="/actividades">Volver</a></p>`;
     return;
   }
   const category = state.categoriesById[activity.category_id];
@@ -544,7 +565,7 @@ function renderActividad(id) {
   view.innerHTML = `
     <nav class="page-nav">
       <button type="button" class="back">← Volver</button>
-      ${category ? `<a class="see-category" href="#/actividades/${category.slug}">Ver todo: ${esc(category.name)} →</a>` : ''}
+      ${category ? `<a class="see-category" href="/actividades/${category.slug}">Ver todo: ${esc(category.name)} →</a>` : ''}
     </nav>
     ${
       isCircle(activity)
@@ -582,7 +603,7 @@ function renderActividad(id) {
         : ''
     }`;
 
-  view.querySelector('.back').addEventListener('click', () => goBack(category ? `#/actividades/${category.slug}` : '#/'));
+  view.querySelector('.back').addEventListener('click', () => goBack(category ? `/actividades/${category.slug}` : '/'));
   view.querySelector('.detail-photo.zoomable')?.addEventListener('click', () => openLightbox(assetUrl(activity.photo_url), activity));
 }
 
@@ -698,7 +719,7 @@ function renderProyecto(slug) {
   const view = document.getElementById('view');
   const p = state.projects.find((x) => x.slug === slug);
   if (!p) {
-    view.innerHTML = `<p class="loading-note">Proyecto no encontrado. <a href="#/quienes-somos">Volver</a></p>`;
+    view.innerHTML = `<p class="loading-note">Proyecto no encontrado. <a href="/quienes-somos">Volver</a></p>`;
     return;
   }
 
@@ -768,7 +789,7 @@ function renderProyecto(slug) {
       )
       .join('')}
     ${activitiesHtml}`;
-  view.querySelector('.back').addEventListener('click', () => goBack('#/quienes-somos'));
+  view.querySelector('.back').addEventListener('click', () => goBack('/quienes-somos'));
 }
 
 // ---------------------------------------------------------------------------
@@ -796,31 +817,56 @@ function renderChatBubble(override) {
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
-let currentHash = location.hash;
+let currentPath = location.pathname;
 
 function route() {
-  scrollPositions[currentHash] = window.scrollY;
-  currentHash = location.hash;
-  const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+  scrollPositions[currentPath] = window.scrollY;
+  currentPath = location.pathname;
+  const parts = location.pathname
+    .split('/')
+    .filter(Boolean)
+    .map((p) => {
+      try {
+        return decodeURIComponent(p);
+      } catch {
+        return p;
+      }
+    });
 
   // Default: número general del centro. renderActividad lo cambia si la actividad tiene contacto propio.
   renderChatBubble(null);
   if (parts.length === 0) renderHome();
   else if (parts[0] === 'actividades' && parts.length === 1) renderCategorias();
   else if (parts[0] === 'actividades' && parts.length === 2) renderCategoria(parts[1]);
-  else if (parts[0] === 'actividad' && parts[1]) renderActividad(decodeURIComponent(parts[1]));
+  else if (parts[0] === 'actividad' && parts[1]) renderActividad(parts[1]);
   else if (parts[0] === 'quienes-somos' && parts[1] === 'proyectos' && parts[2]) renderProyecto(parts[2]);
   else if (parts[0] === 'quienes-somos') renderQuienesSomos();
   else renderHome();
 
-  window.scrollTo(0, restoreScroll ? scrollPositions[currentHash] || 0 : 0);
+  window.scrollTo(0, restoreScroll ? scrollPositions[currentPath] || 0 : 0);
   restoreScroll = false;
+  document.title = pageTitle(parts);
+}
+
+function pageTitle(parts) {
+  const suffix = 'Poloniapp';
+  if (parts[0] === 'actividad') {
+    const a = state.activities.find((x) => x.slug === parts[1] || x.id === parts[1]);
+    return a ? `${a.title} — ${suffix}` : suffix;
+  }
+  if (parts[0] === 'actividades' && parts[1]) return `${state.categories.find((c) => c.slug === parts[1])?.name || 'Actividades'} — ${suffix}`;
+  if (parts[0] === 'actividades') return `Actividades — ${suffix}`;
+  if (parts[0] === 'quienes-somos' && parts[2]) return `${state.projects.find((p) => p.slug === parts[2])?.title || 'Proyectos'} — ${suffix}`;
+  if (parts[0] === 'quienes-somos') return `Quiénes somos — ${suffix}`;
+  return 'Poloniapp — Centro Cultural Opus Dei, Las Condes';
 }
 
 async function init() {
   try {
     await loadData();
-    window.addEventListener('hashchange', () => {
+    // Links antiguos con "#" (compartidos antes o de notificaciones viejas): /#/actividad/x -> /actividad/x
+    if (location.hash.startsWith('#/')) history.replaceState(null, '', location.hash.slice(1) || '/');
+    window.addEventListener('popstate', () => {
       navigatedInApp = true;
       route();
     });

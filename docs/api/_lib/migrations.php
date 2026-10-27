@@ -112,7 +112,7 @@ function migrations(): array
             "UPDATE site_content SET value = 'https://poloniasub35.setmore.com/' WHERE `key` = 'confesiones.booking_url' AND value = 'https://poloniasub35.setmore.com'",
         ],
 
-        // 2026-10-27 (c): URL de cada actividad con su nombre (#/actividad/retiro-de-noviembre) y
+        // 2026-10-27 (c): URL de cada actividad con su nombre (/actividad/retiro-de-noviembre) y
         // círculos sin imagen, con título sin día ni hora (la hora se muestra aparte).
         5 => [
             "ALTER TABLE activities ADD COLUMN slug VARCHAR(191) NULL AFTER title, ADD UNIQUE KEY activities_slug (slug)",

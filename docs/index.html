@@ -3,8 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Las direcciones son limpias (/actividad/…): todas las rutas relativas parten de la raíz. -->
+  <base href="/">
+  <!-- meta:start (page.php reemplaza este bloque con los datos de cada actividad o proyecto) -->
   <title>Poloniapp — Centro Cultural Opus Dei, Las Condes</title>
   <meta name="description" content="Actividades, formación y oración del centro cultural Polonia, Las Condes.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Poloniapp">
+  <meta property="og:title" content="Poloniapp — Centro Cultural Opus Dei, Las Condes">
+  <meta property="og:description" content="Actividades, formación y oración del centro cultural Polonia, Las Condes.">
+  <meta property="og:image" content="https://poloniapp.cl/assets/img/og-default.png">
+  <meta property="og:url" content="https://poloniapp.cl/">
+  <meta name="twitter:card" content="summary_large_image">
+  <!-- meta:end -->
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
   <link rel="manifest" href="manifest.json">
@@ -14,13 +25,13 @@
   <meta name="apple-mobile-web-app-title" content="Poloniapp">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="preload" href="assets/fonts/google-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/css/fonts.css?v=20261030">
-  <link rel="stylesheet" href="assets/css/site.css?v=20261030">
+  <link rel="stylesheet" href="assets/css/fonts.css?v=20261031">
+  <link rel="stylesheet" href="assets/css/site.css?v=20261031">
 </head>
 <body>
   <div class="app">
     <header class="site-header" id="site-header">
-      <a class="logo" href="#/"><img src="assets/img/poloniapp-logo.svg" alt="Poloniapp" width="81" height="34"></a>
+      <a class="logo" href="/"><img src="assets/img/poloniapp-logo.svg" alt="Poloniapp" width="81" height="34"></a>
       <button type="button" class="menu-btn" id="menu-btn" aria-label="Abrir menú" aria-expanded="false" aria-controls="menu-panel">
         <span></span><span></span><span></span>
       </button>
@@ -32,6 +43,6 @@
     <nav class="tabbar" id="tabbar"></nav>
   </div>
 
-  <script type="module" src="assets/js/app.js?v=20261030"></script>
+  <script type="module" src="assets/js/app.js?v=20261031"></script>
 </body>
 </html>

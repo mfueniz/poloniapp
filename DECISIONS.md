@@ -4,6 +4,15 @@ Log vivo de decisiones de diseño, UX/UI y estructura de contenido tomadas en se
 
 ---
 
+## 2026-10-27 — Ronda 14: direcciones sin "#"
+
+- El "#" venía de GitHub Pages (hosting que no se puede configurar). En el servidor propio se pasa a direcciones limpias: `poloniapp.cl/actividad/retiro-de-noviembre`, `/actividades/circulos`, `/quienes-somos/proyectos/puentes`. El sitio navega con History API (sin recargar); los links antiguos con `#/…` redirigen solos.
+- `.htaccess`: el deploy descarga el del servidor por FTPS y solo reemplaza el bloque `# BEGIN/END Poloniapp` (`.github/htaccess-poloniapp`), conservando lo que tenga cPanel (ej. versión de PHP). Si no puede leerlo por algo distinto a "no existe", corta el deploy.
+- `page.php` entrega la página para esas rutas con título, descripción e imagen de la actividad / categoría / proyecto (Open Graph), para que WhatsApp y Google muestren la vista previa correcta; 404 si la actividad no existe. Imagen por defecto: `assets/img/og-default.png`.
+- `<base href="/">` en index.html (las rutas relativas parten de la raíz). Notificaciones nuevas llevan `./actividad/<slug>`.
+
+---
+
 ## 2026-10-27 — Ronda 13: notificaciones con diagnóstico, dos fechas, retiro mensual, lightbox, Puentes completo
 
 - Notificaciones: el aviso ahora va cifrado con el mensaje adentro (RFC 8291, `push_encrypt` en `api/_lib/push.php`, verificado descifrándolo con Node), además del método anterior sin contenido como respaldo. Cada envío guarda un reporte (`settings.last_push_report`): a cuántos llegó, cuántos dispositivos ya no existían y qué respondió Google/Apple cuando falla. El panel muestra dispositivos por servicio, el último reporte y un botón "Enviar notificación de prueba". En el sitio, menú ☰ → Notificaciones muestra el estado del teléfono y permite activarlas o volver a registrarlas.

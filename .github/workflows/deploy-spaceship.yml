@@ -13,6 +13,7 @@ on:
     paths:
       - 'docs/**'
       - '.github/workflows/deploy-spaceship.yml'
+      - '.github/htaccess-poloniapp'
   workflow_dispatch:
 
 concurrency:
@@ -60,6 +61,43 @@ jobs:
             "db_pass" => getenv("DB_PASS"),
           ], true), ";\n";' > docs/api/config.php
           php -l docs/api/config.php
+
+      # Direcciones limpias (/actividad/…): el .htaccess de la carpeta del sitio necesita las
+      # reglas de .github/htaccess-poloniapp. cPanel puede tener ahí su propio .htaccess (ej. la
+      # versión de PHP), así que se descarga el actual y solo se reemplaza el bloque de Poloniapp.
+      # Si no se puede leer (por algo distinto a "no existe"), se corta para no pisarlo.
+      - name: Preparar docs/.htaccess (conserva lo que ya tenga el servidor)
+        if: steps.check.outputs.ready == 'true'
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ vars.FTP_SERVER_DIR || 'public_html/' }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL || 'ftps' }}
+          FTP_SECURITY: ${{ vars.FTP_SECURITY || 'strict' }}
+        run: |
+          dir="${FTP_SERVER_DIR%/}/"
+          [ "$dir" = "./" ] && dir=""
+          opts=(--silent --show-error --max-time 60 --user "$FTP_USERNAME:$FTP_PASSWORD")
+          [ "$FTP_PROTOCOL" = "ftp" ] || opts+=(--ssl-reqd)
+          [ "$FTP_SECURITY" = "loose" ] && opts+=(--insecure)
+          set +e
+          curl "${opts[@]}" "ftp://$FTP_SERVER/${dir}.htaccess" -o server.htaccess
+          code=$?
+          set -e
+          if [ "$code" -eq 78 ]; then
+            : > server.htaccess
+            echo "No había .htaccess en el servidor: se crea uno nuevo."
+          elif [ "$code" -ne 0 ]; then
+            echo "::error::No se pudo leer el .htaccess del servidor (curl $code). No se sigue para no pisarlo."
+            exit 1
+          else
+            echo "Se conserva el .htaccess del servidor ($(grep -vc '^# \(BEGIN\|END\) Poloniapp' server.htaccess) líneas)."
+          fi
+          awk '/^# BEGIN Poloniapp/{skip=1} !skip{print} /^# END Poloniapp/{skip=0}' server.htaccess | sed '/./,$!d' > rest.htaccess
+          { cat .github/htaccess-poloniapp; [ -s rest.htaccess ] && { echo; cat rest.htaccess; }; } > docs/.htaccess
+          rm -f server.htaccess rest.htaccess
+          echo "docs/.htaccess listo ($(wc -l < docs/.htaccess) líneas)."
 
       - name: Subir docs/ por FTP
         if: steps.check.outputs.ready == 'true'

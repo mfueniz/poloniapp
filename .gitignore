@@ -2,3 +2,6 @@
 
 # Credenciales de MySQL, las genera el deploy
 docs/api/config.php
+
+# Lo arma el deploy: el .htaccess del servidor + .github/htaccess-poloniapp
+docs/.htaccess
