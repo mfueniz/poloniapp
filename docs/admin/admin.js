@@ -399,9 +399,7 @@ async function loadActividades() {
 
   container.innerHTML = `
     ${flashMessage ? `<p class="flash">${esc(flashMessage)}</p>` : ''}
-    <p class="tab-note">Al crear una actividad visible se envía una notificación a ${
-      stats ? `los <strong>${stats.subscribers}</strong> dispositivos` : 'los dispositivos'
-    } que activaron las notificaciones de Poloniapp.</p>
+    ${pushBoxHtml(stats)}
     <details class="acc acc-new" data-key="new">
       <summary>+ Nueva actividad</summary>
       ${activityFormHtml(null)}
@@ -422,6 +420,49 @@ async function loadActividades() {
     if (wasOpen.has(d.dataset.key)) d.open = true;
   });
   container.querySelectorAll('.activity-form').forEach(wireActivityCard);
+  wirePushBox(container);
+}
+
+// Notificaciones: cuántos dispositivos las tienen activadas, qué pasó en el último envío y un
+// botón para mandar una prueba (sirve para diagnosticar si Google/Apple rechazan el aviso).
+function pushBoxHtml(stats) {
+  if (!stats) return '';
+  const services = Object.entries(stats.by_service || {}).map(([k, v]) => `${esc(k)}: ${v}`).join(' · ');
+  const r = stats.last_report;
+  const errors = (r?.errors || []).map((e) => `${esc(e.service)} → ${e.code ? 'HTTP ' + e.code : 'sin respuesta'}${e.detail ? ' (' + esc(e.detail) + ')' : ''}`).join('<br>');
+  return `
+    <div class="tab-note push-box">
+      <p><strong>Notificaciones:</strong> al crear una actividad visible se avisa a los <strong>${stats.subscribers}</strong> dispositivos que las activaron${services ? ` (${services})` : ''}.</p>
+      ${
+        stats.subscribers
+          ? ''
+          : `<p>Ningún dispositivo las tiene activadas todavía. En el celular: abre poloniapp.cl, menú ☰ → <strong>Notificaciones</strong> → <strong>Activar</strong>. En iPhone primero hay que instalar la app (Compartir → Agregar a inicio) y activarlas desde ahí.</p>`
+      }
+      ${
+        r
+          ? `<p class="push-last">Último envío (${esc(r.at)}${r.title ? ' · ' + esc(r.title) : ''}): llegó a ${r.sent} de ${r.total}${r.removed ? ` · ${r.removed} ya no existían y se quitaron` : ''}.${errors ? `<br>${errors}` : ''}</p>`
+          : ''
+      }
+      <div class="crud-actions"><button class="save push-test" ${stats.subscribers ? '' : 'disabled'}>Enviar notificación de prueba</button><span class="status"></span></div>
+    </div>`;
+}
+
+function wirePushBox(container) {
+  const btn = container.querySelector('.push-test');
+  btn?.addEventListener('click', async () => {
+    const status = btn.nextElementSibling;
+    btn.disabled = true;
+    status.textContent = 'Enviando…';
+    const { data, error } = await attempt(api('push_test', { method: 'POST' }));
+    btn.disabled = false;
+    if (error) {
+      status.textContent = 'Error: ' + error.message;
+      return;
+    }
+    const box = btn.closest('.push-box');
+    box.outerHTML = pushBoxHtml(data);
+    wirePushBox(container);
+  });
 }
 
 function wireActivityCard(card) {
@@ -597,8 +638,19 @@ function sectionHtml(s = {}) {
         <div><label>Título de la sección</label><input type="text" class="sec-title" value="${esc(s.title)}"></div>
         <div style="flex:0 0 auto;align-self:flex-end;"><button type="button" class="remove-section">Quitar sección</button></div>
       </div>
-      <div class="crud-row"><div><label>Texto (usa **texto** para destacar; los números de WhatsApp se vuelven links)</label>
-        <textarea class="sec-text" rows="3">${esc(s.text)}</textarea></div></div>
+      <div class="crud-row">
+        <div>
+          <label>Imagen de la sección (opcional)</label>
+          <div class="image-field">
+            <img class="image-preview sec-preview" src="${esc(previewSrc(s.image))}" ${s.image ? '' : 'hidden'}>
+            <input type="file" accept="image/*" class="sec-image-input">
+            <span class="status upload-status"></span>
+          </div>
+          <input type="text" class="sec-image" value="${esc(s.image)}" placeholder="o pega una ruta/URL">
+        </div>
+      </div>
+      <div class="crud-row"><div><label>Texto (**texto** = destacado · línea que empieza con "- " = viñeta · los números de WhatsApp se vuelven links)</label>
+        <textarea class="sec-text" rows="5">${esc(s.text)}</textarea></div></div>
       <label class="sub-label">Tarjetas</label>
       <div class="cards">${(s.cards || []).map(cardRowHtml).join('')}</div>
       <button type="button" class="add-btn add-card">+ tarjeta</button>
@@ -709,6 +761,25 @@ function wireProjectCard(card) {
     else if (t.matches('.add-button')) t.previousElementSibling.insertAdjacentHTML('beforeend', buttonRowHtml());
     else if (t.matches('.sub-row .remove')) t.closest('.sub-row').remove();
   });
+  // Subir imagen de una sección (delegado: las secciones se agregan dinámicamente)
+  card.addEventListener('change', async (e) => {
+    if (!e.target.matches('.sec-image-input')) return;
+    const sec = e.target.closest('.section-editor');
+    const file = e.target.files[0];
+    if (!file) return;
+    const statusEl = sec.querySelector('.upload-status');
+    statusEl.textContent = 'Subiendo…';
+    try {
+      const url = await uploadImage(file);
+      sec.querySelector('.sec-image').value = url;
+      const preview = sec.querySelector('.sec-preview');
+      preview.src = previewSrc(url);
+      preview.hidden = false;
+      statusEl.textContent = 'Subida ✓ — falta Guardar';
+    } catch (err) {
+      statusEl.textContent = 'Error: ' + err.message;
+    }
+  });
   card.querySelector('.p-category').addEventListener('change', (e) => {
     card.querySelectorAll('.p-labels').forEach((el) => (el.hidden = !e.target.value));
   });
@@ -740,6 +811,7 @@ function wireProjectCard(card) {
     }
     const sections = [...card.querySelectorAll('.section-editor')].map((sec) => ({
       title: sec.querySelector('.sec-title').value.trim(),
+      image: sec.querySelector('.sec-image').value.trim(),
       text: sec.querySelector('.sec-text').value.trim(),
       cards: [...sec.querySelectorAll('.card-row')]
         .map((r) => ({ title: r.querySelector('.c-title').value.trim(), text: r.querySelector('.c-text').value.trim(), meta: r.querySelector('.c-meta').value.trim() }))

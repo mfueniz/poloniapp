@@ -14,7 +14,7 @@
 //            POST ?action=category_create   categoría nueva desde el selector de actividades
 //            POST ?action=save_activity     actividad + todas sus sesiones en un solo guardado
 //            POST ?action=admin_add|admin_delete|password   gestión de administradores
-//            GET  ?action=prayer_admin|stats   POST ?action=prayer_refresh|prayer_override
+//            GET  ?action=prayer_admin|stats   POST ?action=prayer_refresh|prayer_override|push_test
 //
 // Las credenciales de la base viven en config.php, que genera el workflow de deploy desde los
 // GitHub Secrets (nunca va en el repo). Ver config.sample.php.
@@ -613,7 +613,15 @@ try {
 
         case 'GET stats':
             require_admin();
-            respond(['subscribers' => (int) db()->query('SELECT COUNT(*) FROM push_subscriptions')->fetchColumn()]);
+            respond(push_status());
+
+        case 'POST push_test':
+            $admin = require_admin();
+            push_send_all(
+                ['title' => 'Prueba de Poloniapp', 'body' => 'Si ves esto, las notificaciones funcionan.', 'url' => './'],
+                'mailto:' . $admin['email']
+            );
+            respond(push_status());
 
         case 'POST prayer_refresh':
             require_admin();

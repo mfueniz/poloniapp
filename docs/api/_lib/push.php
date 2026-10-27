@@ -98,12 +98,90 @@ function push_message(): array
     return is_array($msg) ? $msg : ['title' => 'Poloniapp', 'body' => 'Hay novedades en Poloniapp.', 'url' => './'];
 }
 
+function b64url_decode(string $s): string
+{
+    return (string) base64_decode(strtr($s, '-_', '+/') . str_repeat('=', (4 - strlen($s) % 4) % 4));
+}
+
+/**
+ * Cifra el mensaje para un dispositivo (RFC 8291, "aes128gcm"). Algunos servicios (Apple)
+ * esperan contenido en el aviso; si algo falla se manda vacío y el service worker lo pide a la API.
+ */
+function push_encrypt(string $payload, string $p256dh, string $auth): ?string
+{
+    $uaPublic = b64url_decode($p256dh);
+    $authSecret = b64url_decode($auth);
+    if (strlen($uaPublic) !== 65 || strlen($authSecret) < 16 || !function_exists('openssl_pkey_derive')) {
+        return null;
+    }
+    // Clave efímera del servidor para este mensaje
+    $local = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+    if (!$local) {
+        return null;
+    }
+    $ec = openssl_pkey_get_details($local)['ec'];
+    $asPublic = "\x04" . str_pad($ec['x'], 32, "\0", STR_PAD_LEFT) . str_pad($ec['y'], 32, "\0", STR_PAD_LEFT);
+    // Clave pública del navegador (punto P-256 sin comprimir) -> PEM para OpenSSL
+    $der = hex2bin('3059301306072a8648ce3d020106082a8648ce3d030107034200') . $uaPublic;
+    $uaPem = "-----BEGIN PUBLIC KEY-----\n" . chunk_split(base64_encode($der), 64, "\n") . "-----END PUBLIC KEY-----\n";
+    $shared = openssl_pkey_derive(openssl_pkey_get_public($uaPem), $local, 32);
+    if ($shared === false) {
+        return null;
+    }
+    $ikm = hash_hkdf('sha256', $shared, 32, "WebPush: info\0" . $uaPublic . $asPublic, $authSecret);
+    $salt = random_bytes(16);
+    $cek = hash_hkdf('sha256', $ikm, 16, "Content-Encoding: aes128gcm\0", $salt);
+    $nonce = hash_hkdf('sha256', $ikm, 12, "Content-Encoding: nonce\0", $salt);
+    $cipher = openssl_encrypt($payload . "\x02", 'aes-128-gcm', $cek, OPENSSL_RAW_DATA, $nonce, $tag);
+    if ($cipher === false) {
+        return null;
+    }
+    return $salt . pack('N', 4096) . chr(65) . $asPublic . $cipher . $tag;
+}
+
+function push_service(string $endpoint): string
+{
+    $host = (string) parse_url($endpoint, PHP_URL_HOST);
+    if (strpos($host, 'apple.com') !== false) {
+        return 'iPhone / Mac (Apple)';
+    }
+    if (strpos($host, 'googleapis.com') !== false) {
+        return 'Android / Chrome (Google)';
+    }
+    if (strpos($host, 'mozilla.com') !== false) {
+        return 'Firefox';
+    }
+    return strpos($host, 'windows.com') !== false ? 'Edge (Windows)' : $host;
+}
+
+/** Dispositivos suscritos por servicio + resultado del último envío (para el panel). */
+function push_status(): array
+{
+    $byService = [];
+    foreach (db()->query('SELECT endpoint FROM push_subscriptions') as $row) {
+        $service = push_service($row['endpoint']);
+        $byService[$service] = ($byService[$service] ?? 0) + 1;
+    }
+    return [
+        'subscribers' => array_sum($byService),
+        'by_service' => $byService,
+        'last_report' => json_decode((string) setting('last_push_report'), true),
+    ];
+}
+
 /** Guarda el mensaje y avisa a todos los dispositivos suscritos. Devuelve cuántos lo recibieron. */
 function push_send_all(array $message, string $subject): int
 {
-    set_setting('last_push', json_encode($message + ['ts' => time()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-    $subs = db()->query('SELECT id, endpoint FROM push_subscriptions')->fetchAll();
+    $message += ['ts' => time()];
+    $json = json_encode($message, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    set_setting('last_push', $json);
+    $subs = db()->query('SELECT id, endpoint, p256dh, auth FROM push_subscriptions')->fetchAll();
+    $report = ['at' => date('Y-m-d H:i:s'), 'title' => $message['body'] ?? '', 'total' => count($subs), 'sent' => 0, 'removed' => 0, 'errors' => []];
     if (!$subs || !function_exists('curl_multi_init')) {
+        if ($subs) {
+            $report['errors'][] = ['service' => 'servidor', 'code' => 0, 'detail' => 'PHP sin la extensión curl'];
+        }
+        set_setting('last_push_report', json_encode($report, JSON_UNESCAPED_UNICODE));
         return 0;
     }
     [$public, $private] = vapid_keys();
@@ -115,22 +193,24 @@ function push_send_all(array $message, string $subject): int
         $parts = parse_url($sub['endpoint']);
         $audience = $parts['scheme'] . '://' . $parts['host'];
         $jwts[$audience] = $jwts[$audience] ?? vapid_jwt($audience, $private, $subject);
+        $body = $sub['p256dh'] && $sub['auth'] ? push_encrypt($json, $sub['p256dh'], $sub['auth']) : null;
+        $headers = ['Authorization: vapid t=' . $jwts[$audience] . ', k=' . $public, 'TTL: 86400', 'Urgency: high'];
+        if ($body !== null) {
+            $headers[] = 'Content-Encoding: aes128gcm';
+            $headers[] = 'Content-Type: application/octet-stream';
+        }
+        $headers[] = 'Content-Length: ' . strlen((string) $body);
         $ch = curl_init($sub['endpoint']);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => '',
+            CURLOPT_POSTFIELDS => (string) $body,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CONNECTTIMEOUT => 5,
             CURLOPT_TIMEOUT => 10,
-            CURLOPT_HTTPHEADER => [
-                'Authorization: vapid t=' . $jwts[$audience] . ', k=' . $public,
-                'TTL: 86400',
-                'Urgency: normal',
-                'Content-Length: 0',
-            ],
+            CURLOPT_HTTPHEADER => $headers,
         ]);
         curl_multi_add_handle($mh, $ch);
-        $handles[$sub['id']] = $ch;
+        $handles[$sub['id']] = [$ch, $sub['endpoint']];
     }
     do {
         $status = curl_multi_exec($mh, $running);
@@ -139,20 +219,23 @@ function push_send_all(array $message, string $subject): int
         }
     } while ($running && $status === CURLM_OK);
 
-    $sent = 0;
     $gone = db()->prepare('DELETE FROM push_subscriptions WHERE id = ?');
-    foreach ($handles as $id => $ch) {
+    foreach ($handles as $id => [$ch, $endpoint]) {
         $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         if ($code >= 200 && $code < 300) {
-            $sent++;
+            $report['sent']++;
         } elseif ($code === 404 || $code === 410) {
             $gone->execute([$id]); // el dispositivo se dio de baja o desinstaló la app
+            $report['removed']++;
         } else {
-            error_log("[poloniapp push] HTTP $code " . substr((string) curl_multi_getcontent($ch), 0, 200));
+            $detail = $code ? substr(trim((string) curl_multi_getcontent($ch)), 0, 200) : curl_error($ch);
+            $report['errors'][] = ['service' => push_service($endpoint), 'code' => $code, 'detail' => $detail];
+            error_log("[poloniapp push] HTTP $code $detail");
         }
         curl_multi_remove_handle($mh, $ch);
         curl_close($ch);
     }
     curl_multi_close($mh);
-    return $sent;
+    set_setting('last_push_report', json_encode($report, JSON_UNESCAPED_UNICODE));
+    return $report['sent'];
 }

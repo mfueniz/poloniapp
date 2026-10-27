@@ -224,3 +224,8 @@ details.acc details.item { background: var(--color-surface); }
 .crud-actions.form-actions { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--color-border); }
 .crud-actions.form-actions .save { padding: 10px 22px; font-size: 0.9rem; font-weight: 700; border-radius: 999px; }
 .crud-actions .view-link { font-size: 0.84rem; margin-left: auto; }
+
+/* --- Recuadro de notificaciones --- */
+.push-box p { margin: 0 0 8px; }
+.push-box .push-last { color: var(--color-ink); font-size: 0.82rem; }
+.push-box .crud-actions { margin-top: 6px; }

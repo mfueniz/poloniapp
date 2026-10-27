@@ -119,7 +119,84 @@ function migrations(): array
             "UPDATE activities a JOIN categories c ON c.id = a.category_id SET a.photo_url = NULL WHERE c.slug = 'circulos'",
             'rename_circles_and_fill_slugs',
         ],
+
+        // 2026-10-27 (d): contenido completo de Puentes desde su presentación.
+        6 => [
+            'update_puentes_from_presentation',
+        ],
     ];
+}
+
+/**
+ * Secciones de Puentes según la presentación "Proyecto_Puentes_REV_GVU.pptx": punto de partida
+ * (Parroquia San Andrés), los 3 pilares, el detalle de cada uno con sus inscripciones y cómo
+ * ayudar. Se conservan la frase, el logo y los links que ya tuvieran los botones de ayuda.
+ */
+function update_puentes_from_presentation(): void
+{
+    $st = db()->prepare("SELECT id, sections FROM projects WHERE slug = 'puentes'");
+    $st->execute();
+    $project = $st->fetch();
+    if (!$project) {
+        return;
+    }
+    $links = [];
+    foreach (json_decode((string) $project['sections'], true) ?: [] as $section) {
+        foreach ($section['buttons'] ?? [] as $b) {
+            $links[mb_lower((string) ($b['label'] ?? ''))] = (string) ($b['url'] ?? '');
+        }
+    }
+    $img = 'assets/img/proyectos/';
+    $sections = [
+        [
+            'title' => 'Nuestro punto de partida',
+            'image' => $img . 'puentes-parroquia.webp',
+            'text' => "**Parroquia San Andrés**, en Santiago Centro.",
+            'cards' => [],
+            'buttons' => [],
+        ],
+        [
+            'title' => '3 pilares',
+            'text' => '',
+            'cards' => [
+                ['title' => 'Familia', 'text' => 'Fortalecer el proyecto de familia para matrimonios jóvenes.', 'meta' => 'Una vez al mes'],
+                ['title' => 'Trabajo', 'text' => 'Mejorar la gestión de negocios de emprendedores y ayudar en la reinserción laboral de profesionales.', 'meta' => 'Mensual presencial + sesiones online'],
+                ['title' => 'Vivienda', 'text' => 'Reparar casas para asegurar condiciones dignas para vivir.', 'meta' => 'Sábados en la mañana'],
+            ],
+            'buttons' => [],
+        ],
+        [
+            'title' => 'Familia',
+            'image' => $img . 'puentes-familia.webp',
+            'text' => "**Objetivo:** fortalecer el proyecto de familia para matrimonios jóvenes.\n\n**Modalidad:**\n- Espacio de conversación entre matrimonios\n- Invitados con temas de interés\n\n**Frecuencia:** una vez al mes.\n\n“Una oportunidad de vivir la fe en familia”. ¡Invitadísimos!\n\n**Inscripciones:**\nIgnacio Aránguiz +569 5371 9944\nJoaquín Ulloa +569 9962 6217",
+            'cards' => [],
+            'buttons' => [],
+        ],
+        [
+            'title' => 'Trabajo',
+            'image' => $img . 'puentes-trabajo.webp',
+            'text' => "**Objetivos:**\n- Mejorar la gestión del negocio para emprendedores\n- Ayudar en la reinserción laboral de profesionales\n\n**Modalidad:**\n- Acompañamiento a profesionales y emprendedores\n- Talleres según temática (finanzas, administración…)\n\n**Frecuencia:**\n- Una vez al mes presencial\n- Sesiones online semanales individuales\n\n**Inscripciones:**\nMartín Fuenzalida +569 7373 4206\nJosé I. Guzmán +569 7708 9186",
+            'cards' => [],
+            'buttons' => [],
+        ],
+        [
+            'title' => 'Vivienda',
+            'image' => $img . 'puentes-vivienda.webp',
+            'text' => "**Objetivo:** reparar casas para asegurar condiciones dignas para vivir.\n\n**Modalidad:** evaluar las viviendas más afectadas, recolectar donaciones y ejecutar las reparaciones con ayuda de voluntarios.\n\n**Frecuencia:** sábados en la mañana, a definir de acuerdo a la necesidad.\n\n“Una oportunidad de mejorar la calidad de vida de las familias”.\n\n**Inscripciones:**\nTomás Massman +569 9175 0169\nFrancisco Álvarez +569 9140 1610",
+            'cards' => [],
+            'buttons' => [],
+        ],
+        [
+            'title' => '¿Cómo ayudar al proyecto?',
+            'text' => '',
+            'cards' => [],
+            'buttons' => array_map(function ($label) use ($links) {
+                return ['label' => $label, 'url' => $links[mb_lower($label)] ?? ''];
+            }, ['Voluntario', 'Difusión', 'Donación']),
+        ],
+    ];
+    db()->prepare('UPDATE projects SET sections = ? WHERE id = ?')
+        ->execute([json_encode($sections, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $project['id']]);
 }
 
 /** "Círculo — martes 08:00" -> "Círculo en Polonia", y slug para todas las actividades. */

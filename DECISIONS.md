@@ -4,6 +4,16 @@ Log vivo de decisiones de diseño, UX/UI y estructura de contenido tomadas en se
 
 ---
 
+## 2026-10-27 — Ronda 13: notificaciones con diagnóstico, dos fechas, retiro mensual, lightbox, Puentes completo
+
+- Notificaciones: el aviso ahora va cifrado con el mensaje adentro (RFC 8291, `push_encrypt` en `api/_lib/push.php`, verificado descifrándolo con Node), además del método anterior sin contenido como respaldo. Cada envío guarda un reporte (`settings.last_push_report`): a cuántos llegó, cuántos dispositivos ya no existían y qué respondió Google/Apple cuando falla. El panel muestra dispositivos por servicio, el último reporte y un botón "Enviar notificación de prueba". En el sitio, menú ☰ → Notificaciones muestra el estado del teléfono y permite activarlas o volver a registrarlas.
+- Tarjetas del inicio: con 2 fechas próximas se ven ambas; con 3 o más, las 2 primeras y "+N más".
+- Regla del retiro mensual: si en la semana actual (lunes a domingo) hay una sesión de un retiro mensual (categoría cuyo nombre contiene "retiros mensuales" o actividad que se llama "Retiro mensual…"), el inicio no muestra los círculos ni su filtro. En Actividades → Círculos siguen visibles.
+- Detalle de actividad: tocar la imagen la abre en grande (lightbox) con "Compartir por WhatsApp": en el celular comparte la imagen con el menú del teléfono; si no se puede, abre WhatsApp con el link de la actividad y de la imagen.
+- Puentes: contenido completo de la presentación (punto de partida en la Parroquia San Andrés, 3 pilares, detalle de Familia / Trabajo / Vivienda con objetivo, modalidad, frecuencia e inscripciones, y cómo ayudar), con sus fotos. Las secciones de proyecto admiten imagen y viñetas ("- ").
+
+---
+
 ## 2026-10-27 — Ronda 12: círculos sin imagen, máximo 4 actividades, URLs con nombre, formulario único
 
 - Inicio: los círculos van en una lista compacta sin imagen (hora + título): "Círculos de hoy" con el filtro Todas, y todos con su día al elegir el filtro Círculos. El resto de las actividades: máximo 4, las más próximas, aparte de los círculos. Los círculos tampoco muestran imagen en la lista de la categoría ni en su detalle.

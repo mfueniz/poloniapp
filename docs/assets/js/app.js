@@ -3,7 +3,7 @@
 // Home: frase + bajada → banner de la app (solo celular) → actividades próximas → Para rezar hoy.
 
 import { api } from './api.js';
-import { renderAppBanner } from './pwa.js?v=20261029';
+import { renderAppBanner, openNotifications } from './pwa.js?v=20261030';
 
 // Raíz real del sitio (docs/), calculada desde la ubicación de este script.
 const ASSETS_BASE = new URL('../../', import.meta.url).href;
@@ -126,7 +126,8 @@ async function loadData() {
 const placeOf = (s) => (s?.location_id ? state.locationsById[s.location_id] : s?.location_text) || '';
 
 // Texto enriquecido de los proyectos: **negrita**, links y números de WhatsApp clickeables,
-// línea en blanco = párrafo nuevo. Con inline=true solo negrita (para usar dentro de un link).
+// línea en blanco = párrafo nuevo, líneas que empiezan con "- " = lista.
+// Con inline=true solo negrita (para usar dentro de un link).
 function richText(text, { inline = false } = {}) {
   let html = esc(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   if (inline) return html.replace(/\n/g, ' ');
@@ -135,7 +136,32 @@ function richText(text, { inline = false } = {}) {
     .replace(/(\+?56\s?9(?:\s?\d){8})/g, (m) => `<a href="https://wa.me/${m.replace(/\D/g, '')}" target="_blank" rel="noopener">${m}</a>`);
   return html
     .split(/\n{2,}/)
-    .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .map((block) => {
+      let out = '';
+      let para = [];
+      let items = [];
+      const flushPara = () => {
+        if (para.length) out += `<p>${para.join('<br>')}</p>`;
+        para = [];
+      };
+      const flushList = () => {
+        if (items.length) out += `<ul>${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
+        items = [];
+      };
+      for (const line of block.split('\n')) {
+        const bullet = line.match(/^\s*[-•]\s+(.*)$/);
+        if (bullet) {
+          flushPara();
+          items.push(bullet[1]);
+        } else {
+          flushList();
+          para.push(line);
+        }
+      }
+      flushPara();
+      flushList();
+      return out;
+    })
     .join('');
 }
 
@@ -174,7 +200,13 @@ window.addEventListener('scroll', () => {
 
 function renderChrome(activeTab) {
   setMenu(false);
-  menuPanel.innerHTML = NAV.map((t) => `<a href="${t.href}" class="${t.key === activeTab ? 'active' : ''}">${t.label}</a>`).join('');
+  menuPanel.innerHTML =
+    NAV.map((t) => `<a href="${t.href}" class="${t.key === activeTab ? 'active' : ''}">${t.label}</a>`).join('') +
+    `<button type="button" class="menu-notify">Notificaciones</button>`;
+  menuPanel.querySelector('.menu-notify').addEventListener('click', () => {
+    setMenu(false);
+    openNotifications();
+  });
   document.getElementById('tabbar').innerHTML = NAV.map(
     (t) => `<a href="${t.href}" class="${t.key === activeTab ? 'active' : ''}">${t.icon}<span>${t.label}</span></a>`
   ).join('');
@@ -203,6 +235,31 @@ const activityHref = (a) => `#/actividad/${encodeURIComponent(a.slug || a.id)}`;
 // Los círculos no llevan imagen: solo título y hora.
 const isCircle = (a) => state.categoriesById[a.category_id]?.slug === 'circulos';
 
+// Retiro mensual: categoría "Retiros mensuales" o una actividad que se llame "Retiro mensual…".
+// La semana (lunes a domingo) en que hay uno, el inicio no muestra los círculos.
+const isMonthlyRetreat = (a) =>
+  /retiros?\s+mensual/i.test(state.categoriesById[a.category_id]?.name || '') || /retiros?\s+mensual/i.test(a.title || '');
+
+function monthlyRetreatThisWeek() {
+  const today = new Date();
+  const monday = addDays(today, -((today.getDay() + 6) % 7));
+  const from = isoDate(monday);
+  const to = isoDate(addDays(monday, 6));
+  return state.activities.some((a) => isMonthlyRetreat(a) && (a.sessions || []).some((s) => s.date && s.date >= from && s.date <= to));
+}
+
+// Fechas de la tarjeta: con 2 fechas próximas se muestran las dos; con 3 o más, las dos
+// primeras y "+N más".
+function whenLines(a, occ) {
+  const today = isoDate(new Date());
+  const dated = (a.sessions || [])
+    .filter((s) => s.date && s.date >= today)
+    .sort((x, y) => (x.date + (x.time_start || '')).localeCompare(y.date + (y.time_start || '')));
+  if (dated.length < 2) return `<p class="when">${esc(fmtOccurrence(occ))}</p>`;
+  const lines = dated.slice(0, 2).map((s) => `<p class="when">${esc(fmtDay(s.date) + (s.time_start ? ' · ' + hhmm(s.time_start) : ''))}</p>`);
+  return lines.join('') + (dated.length > 2 ? `<p class="when-more">+${dated.length - 2} más</p>` : '');
+}
+
 function circleRow(a, occ, { showDay }) {
   const time = hhmm(occ.session.time_start);
   const day = showDay ? fmtDay(occ.date) : '';
@@ -227,7 +284,7 @@ function activityCard(a, occ) {
       <div class="info">
         <p class="cat">${esc(category?.name)}</p>
         <p class="title">${esc(a.title)}</p>
-        <p class="when">${esc(fmtOccurrence(occ))}</p>
+        ${whenLines(a, occ)}
       </div>
     </a>`;
 }
@@ -350,8 +407,9 @@ function renderHome() {
 
   // Solo las categorías con actividades próximas o semanales; las demás se ocultan hasta
   // que tengan una actividad nueva.
-  const activeCategories = state.categories.filter((c) =>
-    state.activities.some((a) => a.category_id === c.id && nextOccurrence(a))
+  const hideCircles = monthlyRetreatThisWeek();
+  const activeCategories = state.categories.filter(
+    (c) => !(hideCircles && c.slug === 'circulos') && state.activities.some((a) => a.category_id === c.id && nextOccurrence(a))
   );
   const chipsEl = document.getElementById('chips');
   chipsEl.innerHTML = activeCategories.length
@@ -368,7 +426,7 @@ function renderHome() {
         .map((a) => ({ a, occ: nextOccurrence(a, opts) }))
         .filter((x) => x.occ)
         .sort((x, y) => x.occ.key.localeCompare(y.occ.key));
-    const circles = withNext(list.filter(isCircle), { onlyTodayRecurring: !categoryId });
+    const circles = hideCircles ? [] : withNext(list.filter(isCircle), { onlyTodayRecurring: !categoryId });
     const others = withNext(list.filter((a) => !isCircle(a))).slice(0, HOME_LIMIT);
     const circlesHtml = circles.length
       ? `<div class="circle-list">
@@ -492,7 +550,7 @@ function renderActividad(id) {
       isCircle(activity)
         ? ''
         : activity.photo_url
-        ? `<div class="detail-photo" style="background-image:url('${esc(assetUrl(activity.photo_url))}')"></div>`
+        ? `<button type="button" class="detail-photo zoomable" style="background-image:url('${esc(assetUrl(activity.photo_url))}')" aria-label="Ver imagen completa"></button>`
         : `<div class="detail-photo placeholder"><img src="${MARK}" alt=""></div>`
     }
     <section class="detail-head">
@@ -525,6 +583,54 @@ function renderActividad(id) {
     }`;
 
   view.querySelector('.back').addEventListener('click', () => goBack(category ? `#/actividades/${category.slug}` : '#/'));
+  view.querySelector('.detail-photo.zoomable')?.addEventListener('click', () => openLightbox(assetUrl(activity.photo_url), activity));
+}
+
+// Imagen en grande + compartir por WhatsApp. En el celular se comparte la imagen misma (menú
+// de compartir del teléfono, donde se elige WhatsApp); si no se puede, se abre WhatsApp con
+// el link de la actividad y de la imagen.
+const WHATSAPP_ICON =
+  '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.72.45 3.39 1.3 4.87L2 22l5.36-1.4a9.9 9.9 0 0 0 4.68 1.19h.01c5.46 0 9.9-4.45 9.9-9.91S17.5 2 12.04 2Zm5.8 14.03c-.24.68-1.4 1.3-1.94 1.38-.5.08-1.12.11-1.8-.11-.42-.13-.95-.31-1.64-.6-2.88-1.24-4.76-4.14-4.9-4.33-.14-.19-1.17-1.55-1.17-2.96 0-1.4.74-2.09 1-2.38.26-.28.57-.35.76-.35.19 0 .38 0 .55.01.18.01.42-.07.65.5.24.58.81 2 .88 2.14.07.14.12.31.02.5-.1.19-.15.31-.29.48-.14.17-.3.37-.43.5-.14.14-.29.29-.13.57.17.28.75 1.24 1.62 2 1.11.99 2.05 1.3 2.33 1.44.28.14.44.12.6-.07.17-.19.71-.83.9-1.11.19-.28.38-.24.63-.14.26.09 1.65.78 1.94.92.28.14.47.21.54.33.07.12.07.7-.17 1.38Z"/></svg>';
+
+function openLightbox(imageUrl, activity) {
+  const pageUrl = location.href;
+  const text = `${activity.title}\n${pageUrl}`;
+  let file = null;
+  // Se descarga apenas se abre, para poder compartir al tocar el botón sin esperas
+  // (iPhone exige que "compartir" ocurra directo en el toque).
+  fetch(imageUrl)
+    .then((r) => r.blob())
+    .then((blob) => {
+      const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+      file = new File([blob], `${activity.slug || 'actividad'}.${ext}`, { type: blob.type });
+    })
+    .catch(() => {});
+
+  const box = document.createElement('div');
+  box.className = 'lightbox';
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.setAttribute('aria-label', activity.title);
+  box.innerHTML = `
+    <button type="button" class="lb-close" aria-label="Cerrar">×</button>
+    <img src="${esc(imageUrl)}" alt="${esc(activity.title)}">
+    <div class="lb-actions"><button type="button" class="btn lb-share">${WHATSAPP_ICON}Compartir por WhatsApp</button></div>`;
+  const close = () => {
+    box.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  const onKey = (e) => e.key === 'Escape' && close();
+  document.addEventListener('keydown', onKey);
+  box.addEventListener('click', (e) => (e.target === box || e.target.matches('.lb-close')) && close());
+  box.querySelector('.lb-share').addEventListener('click', () => {
+    if (file && navigator.canShare?.({ files: [file] })) {
+      navigator.share({ files: [file], text }).catch(() => {});
+      return;
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(text + '\n' + new URL(imageUrl, location.href).href)}`, '_blank', 'noopener');
+  });
+  document.body.appendChild(box);
+  box.querySelector('.lb-close').focus();
 }
 
 // ---------------------------------------------------------------------------
@@ -630,6 +736,7 @@ function renderProyecto(slug) {
         (sec) => `
       <section class="project-section">
         ${sec.title ? `<h2>${esc(sec.title)}</h2>` : ''}
+        ${sec.image ? `<img class="section-image" src="${esc(assetUrl(sec.image))}" alt="${esc(sec.title || p.title)}" loading="lazy">` : ''}
         ${sec.text ? `<div class="project-text">${richText(sec.text)}</div>` : ''}
         ${
           sec.cards?.length

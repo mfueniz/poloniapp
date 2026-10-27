@@ -189,6 +189,59 @@ async function installFlow() {
   showInstructions();
 }
 
+// Estado de las notificaciones en este dispositivo (menú ☰ → Notificaciones)
+export async function openNotifications() {
+  let title = 'Notificaciones';
+  let text = '';
+  let action = null;
+  if (!pushSupported()) {
+    if (platform === 'ios' && !isStandalone()) {
+      showInstructions();
+      return;
+    }
+    text = 'Este navegador no permite notificaciones. Prueba con Chrome en Android, o con la app instalada en iPhone (iOS 16.4 o superior).';
+  } else if (Notification.permission === 'denied') {
+    text =
+      'Las notificaciones están bloqueadas para Poloniapp en este teléfono. Para activarlas: abre los ajustes del navegador (o del teléfono) → Notificaciones → poloniapp.cl → Permitir. Después vuelve aquí.';
+  } else if (Notification.permission === 'granted') {
+    try {
+      await ensureSubscription();
+      title = 'Notificaciones activadas ✓';
+      text = 'Este dispositivo recibirá un aviso cada vez que haya una actividad nueva.';
+    } catch (err) {
+      title = 'No se pudo registrar este dispositivo';
+      text = 'Detalle: ' + (err?.message || err) + '. Intenta de nuevo con buena conexión.';
+      action = { label: 'Intentar de nuevo', run: () => openNotifications() };
+    }
+  } else {
+    text = 'Activa las notificaciones y te avisamos cada vez que haya una actividad nueva.';
+    action = { label: 'Activar notificaciones', run: notifyFlow };
+  }
+  const backdrop = document.createElement('div');
+  backdrop.className = 'sheet-backdrop';
+  backdrop.innerHTML = `
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+      <h3 id="sheet-title"></h3>
+      <p class="sheet-text"></p>
+      ${action ? '<button type="button" class="btn block" data-action></button>' : ''}
+      <button type="button" class="btn ghost block" data-close style="margin-top:10px;">Cerrar</button>
+    </div>`;
+  backdrop.querySelector('h3').textContent = title;
+  backdrop.querySelector('.sheet-text').textContent = text;
+  const close = () => backdrop.remove();
+  backdrop.addEventListener('click', (e) => e.target === backdrop && close());
+  backdrop.querySelector('[data-close]').addEventListener('click', close);
+  if (action) {
+    const btn = backdrop.querySelector('[data-action]');
+    btn.textContent = action.label;
+    btn.addEventListener('click', () => {
+      close();
+      action.run();
+    });
+  }
+  document.body.appendChild(backdrop);
+}
+
 const SHARE_ICON =
   '<svg class="share-icon" viewBox="0 0 24 24" fill="none" stroke="#2f7cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg>';
 

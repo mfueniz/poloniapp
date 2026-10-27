@@ -725,3 +725,43 @@ button { font-family: var(--font); }
 }
 .circle-title { flex: 1; font-weight: 600; font-size: 0.95rem; }
 .circle-day { font-size: 0.8rem; color: var(--olive-deep); white-space: nowrap; }
+
+.menu-panel .menu-notify {
+  padding: 14px; border: none; border-top: 1px solid var(--line); margin-top: 4px; border-radius: 0 0 12px 12px;
+  background: none; text-align: left; font-size: 1rem; font-weight: 500; color: var(--slate-deep); cursor: pointer;
+}
+.menu-panel .menu-notify:hover { background: var(--surface); }
+.sheet .sheet-text { margin: 0 0 18px; font-size: 0.95rem; line-height: 1.5; color: var(--slate-deep); }
+
+/* --- Tarjetas con varias fechas --- */
+.activity-card .when + .when { margin-top: 2px; }
+.activity-card .when-more { margin: 3px 0 0; font-size: 0.74rem; font-weight: 700; color: var(--slate); }
+
+/* --- Lightbox de la imagen de una actividad --- */
+.detail-photo.zoomable { display: block; width: calc(100% - 40px); border: none; padding: 0; cursor: zoom-in; }
+.lightbox {
+  position: fixed; inset: 0; z-index: 70;
+  background: rgba(20, 28, 36, 0.92);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: max(56px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+  animation: fade-in 0.15s ease-out;
+}
+.lightbox img { max-width: 100%; max-height: calc(100vh - 170px); object-fit: contain; border-radius: 10px; }
+.lb-close {
+  position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px;
+  width: 44px; height: 44px; border-radius: 50%; border: none;
+  background: rgba(255, 255, 255, 0.14); color: #fff; font-size: 1.6rem; line-height: 1; cursor: pointer;
+}
+.lb-actions { margin-top: 18px; }
+.lb-share { background: #25D366; color: #fff; }
+.lb-share:hover { background: #1fb457; }
+.lb-share svg { width: 20px; height: 20px; }
+
+/* --- Secciones de proyecto con imagen y listas --- */
+.section-image {
+  display: block; width: 100%; max-height: 300px; object-fit: cover;
+  border-radius: var(--radius-card); margin: 0 0 14px; background: var(--surface);
+}
+.project-text ul { margin: 0 0 10px; padding-left: 20px; }
+.project-text li { margin-bottom: 4px; }
+.project-text li::marker { color: var(--red); }
