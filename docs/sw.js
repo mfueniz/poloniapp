@@ -1,7 +1,7 @@
 // poloniapp — service worker: permite instalar el sitio como app, lo deja usable sin
 // conexión (última versión vista) y muestra las notificaciones push.
 
-const CACHE = 'poloniapp-v4';
+const CACHE = 'poloniapp-v5';
 const SHELL = [
   './',
   './index.html',

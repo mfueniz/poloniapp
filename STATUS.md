@@ -9,7 +9,7 @@
 | https://github.com/mfueniz/poloniapp | Repo del código |
 | https://poloniasub35.setmore.com | Sistema de reservas de confesiones (externo al proyecto, solo enlazado) |
 
-**Fase:** en producción en poloniapp.cl con backend propio (MySQL + PHP). Última ronda: 2026-10-27 (ver `DECISIONS.md`, Ronda 11).
+**Fase:** en producción en poloniapp.cl con backend propio (MySQL + PHP). Última ronda: 2026-10-27 (ver `DECISIONS.md`, Ronda 12).
 **Madurez:** 4/5
 
 ## Qué es

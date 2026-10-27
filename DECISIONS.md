@@ -4,6 +4,15 @@ Log vivo de decisiones de diseño, UX/UI y estructura de contenido tomadas en se
 
 ---
 
+## 2026-10-27 — Ronda 12: círculos sin imagen, máximo 4 actividades, URLs con nombre, formulario único
+
+- Inicio: los círculos van en una lista compacta sin imagen (hora + título): "Círculos de hoy" con el filtro Todas, y todos con su día al elegir el filtro Círculos. El resto de las actividades: máximo 4, las más próximas, aparte de los círculos. Los círculos tampoco muestran imagen en la lista de la categoría ni en su detalle.
+- Círculos renombrados "Círculo en {lugar}" (la hora se muestra aparte).
+- URL de cada actividad con su nombre: `#/actividad/retiro-de-noviembre` (`activities.slug`, se actualiza al cambiar el título; si el nombre se repite, agrega día y hora: `circulo-en-polonia-martes-1930`). Los links antiguos con id siguen funcionando.
+- Panel: un solo formulario por actividad (título ancho, categoría, descripción, fecha/hora/lugar de cada sesión, foto, inscripción) con un único botón Guardar abajo (`?action=save_activity`, guarda actividad y sesiones en una transacción y borra las sesiones quitadas). Se elimina el campo Formato: se deduce de la cantidad de sesiones. Una actividad nueva trae una sesión vacía lista para completar y la categoría hay que elegirla.
+
+---
+
 ## 2026-10-27 — Ronda 11: colores brillantes, Confesiones y Encuentros en el inicio
 
 - La interfaz deja el rojo vino (se sentía anticuado) y usa los colores brillantes de la paleta: rojo para botones y links (#E2241A, el #EB271C apenas más oscuro para que el texto blanco pase AA) y celeste para filtros activos, tarjetas y fondos. El vino queda solo en el logo.

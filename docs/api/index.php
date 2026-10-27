@@ -12,6 +12,7 @@
 //            POST ?action=delete&table=X
 //            POST ?action=upload         imagen (multipart, campo "file") -> uploads/
 //            POST ?action=category_create   categoría nueva desde el selector de actividades
+//            POST ?action=save_activity     actividad + todas sus sesiones en un solo guardado
 //            POST ?action=admin_add|admin_delete|password   gestión de administradores
 //            GET  ?action=prayer_admin|stats   POST ?action=prayer_refresh|prayer_override
 //
@@ -318,6 +319,10 @@ function save_row(string $table, array $input, array $admin): array
         $values['updated_by'] = $admin['id'];
     }
     $id = $input[$cfg['pk']] ?? null;
+    // La URL de la actividad sale de su nombre (#/actividad/retiro-de-noviembre).
+    if ($table === 'activities' && isset($values['title'])) {
+        $values['slug'] = unique_slug('activities', (string) $values['title'], $id ?: null);
+    }
     $created = false;
 
     if ($id !== null && $id !== '') {
@@ -340,13 +345,119 @@ function save_row(string $table, array $input, array $admin): array
         db()->prepare('INSERT INTO ' . q($table) . " ($cols) VALUES ($marks)")->execute(array_values($values));
         $created = true;
     }
-    $result = [$cfg['pk'] => $id];
+    $result = [$cfg['pk'] => $id, 'created' => $created];
+    if (isset($values['slug'])) {
+        $result['slug'] = $values['slug'];
+    }
+    return $result;
+}
+
+/**
+ * Primer slug libre entre los textos candidatos (ej. el nombre, y si se repite, el nombre con
+ * día y hora); si todos están tomados, el primero con -2, -3…
+ */
+function unique_slug(string $table, $texts, ?string $excludeId): string
+{
+    $st = db()->prepare('SELECT 1 FROM ' . q($table) . ' WHERE slug = ? AND id <> ?');
+    $free = function (string $slug) use ($st, $excludeId): bool {
+        $st->execute([$slug, $excludeId ?? '']);
+        return !$st->fetch();
+    };
+    $bases = array_values(array_filter(array_map(function ($t) {
+        return substr(slugify((string) $t), 0, 180);
+    }, (array) $texts)));
+    $bases = $bases ?: ['actividad'];
+    foreach ($bases as $slug) {
+        if ($free($slug)) {
+            return $slug;
+        }
+    }
+    for ($n = 2; ; $n++) {
+        if ($free($bases[0] . '-' . $n)) {
+            return $bases[0] . '-' . $n;
+        }
+    }
+}
+
+/** Slug de una actividad: su nombre; si ya existe otra igual, nombre + día/fecha + hora. */
+function activity_slug(string $id, string $title, ?array $session): string
+{
+    $when = $session ? trim(($session['weekday'] ?: $session['date'] ?: '') . ' ' . str_replace(':', '', substr((string) $session['time_start'], 0, 5))) : '';
+    return unique_slug('activities', $when !== '' ? [$title, "$title $when"] : [$title], $id);
+}
+
+/**
+ * Guarda una actividad y todas sus sesiones de una vez (el formulario del panel es uno solo).
+ * Las sesiones que ya no vienen en la lista se borran. El formato (única / serie) se deduce
+ * de la cantidad de sesiones. Una actividad nueva y visible avisa a los dispositivos suscritos.
+ */
+function save_activity(array $input, array $admin): array
+{
+    $sessionCols = array_values(array_diff(TABLES['sessions']['cols'], ['activity_id']));
+    $sessions = [];
+    foreach ((array) ($input['sessions'] ?? []) as $raw) {
+        $row = [];
+        foreach ($sessionCols as $col) {
+            $v = $raw[$col] ?? null;
+            $row[$col] = ($v === '' || $v === null) ? null : (string) $v;
+        }
+        if (!$row['date'] && !$row['weekday']) {
+            // Fila vacía (ej. la que trae por defecto una actividad nueva): se ignora.
+            $filled = array_filter($row, function ($v, $k) {
+                return $v !== null && !in_array($k, ['location_id', 'location_text'], true);
+            }, ARRAY_FILTER_USE_BOTH);
+            if (!$filled) {
+                continue;
+            }
+            throw new ApiError('Cada sesión necesita una fecha o el día en que se repite.', 400);
+        }
+        if ($row['date']) {
+            $row['weekday'] = null;
+        }
+        $sessions[] = ['id' => (string) ($raw['id'] ?? ''), 'values' => $row];
+    }
+
+    $activity = array_intersect_key($input, array_flip(array_merge(['id'], TABLES['activities']['cols'])));
+    $activity['format'] = count($sessions) > 1 ? 'series' : 'single';
+
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $result = save_row('activities', $activity, $admin);
+        $keep = [];
+        foreach ($sessions as $s) {
+            $values = $s['values'];
+            if ($s['id'] !== '') {
+                $sets = implode(', ', array_map(function ($c) {
+                    return q($c) . ' = ?';
+                }, array_keys($values)));
+                $pdo->prepare("UPDATE sessions SET $sets WHERE id = ? AND activity_id = ?")
+                    ->execute(array_merge(array_values($values), [$s['id'], $result['id']]));
+                $keep[] = $s['id'];
+            } else {
+                $sid = uuid();
+                $values = ['id' => $sid, 'activity_id' => $result['id']] + $values;
+                $pdo->prepare('INSERT INTO sessions (' . implode(', ', array_map('q', array_keys($values))) . ') VALUES ('
+                    . implode(', ', array_fill(0, count($values), '?')) . ')')->execute(array_values($values));
+                $keep[] = $sid;
+            }
+        }
+        $marks = $keep ? ' AND id NOT IN (' . implode(', ', array_fill(0, count($keep), '?')) . ')' : '';
+        $pdo->prepare("DELETE FROM sessions WHERE activity_id = ?$marks")->execute(array_merge([$result['id']], $keep));
+        // Con las sesiones ya guardadas, el slug puede usar día y hora si el nombre se repite.
+        $result['slug'] = activity_slug($result['id'], (string) ($activity['title'] ?? ''), $sessions[0]['values'] ?? null);
+        $pdo->prepare('UPDATE activities SET slug = ? WHERE id = ?')->execute([$result['slug'], $result['id']]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
 
     // Actividad nueva y visible -> notificación a todos los dispositivos suscritos.
-    if ($table === 'activities' && $created && !empty($values['visible'])) {
+    if ($result['created'] && !empty($activity['visible'])) {
         try {
             $result['notified'] = push_send_all(
-                ['title' => 'Nueva actividad en Poloniapp', 'body' => (string) ($values['title'] ?? ''), 'url' => './#/actividad/' . $id],
+                ['title' => 'Nueva actividad en Poloniapp', 'body' => (string) ($activity['title'] ?? ''), 'url' => './#/actividad/' . $result['slug']],
                 'mailto:' . $admin['email']
             );
         } catch (Throwable $e) {
@@ -512,6 +623,9 @@ try {
             require_admin();
             prayer_override(body());
             respond(prayer_items());
+
+        case 'POST save_activity':
+            respond(save_activity(body(), require_admin()));
 
         case 'POST category_create':
             require_admin();

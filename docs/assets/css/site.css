@@ -692,3 +692,36 @@ button { font-family: var(--font); }
 .confession-card h2 { margin: 0 0 6px; font-size: 1.25rem; }
 .confession-card p { margin: 0 0 16px; font-size: 1rem; line-height: 1.45; max-width: 30ch; }
 .confession-card .btn { position: relative; z-index: 1; }
+
+/* --- Círculos en el inicio: sin imagen, solo hora y título --- */
+.circle-list {
+  margin: 14px 20px 0;
+  padding: 6px 0;
+  border-radius: var(--radius-card);
+  background: var(--sky-soft);
+  border: 1px solid #D5E6F8;
+}
+.circle-head {
+  margin: 8px 16px 4px;
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--slate);
+}
+.circle-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 11px 16px;
+  color: var(--slate-deep);
+  text-decoration: none;
+}
+.circle-row + .circle-row { border-top: 1px solid #D5E6F8; }
+.circle-row:hover { background: rgba(133, 186, 234, 0.18); }
+.circle-time {
+  flex: 0 0 auto;
+  min-width: 58px;
+  padding: 4px 0;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--red-ui);
+  font-weight: 700; font-size: 0.92rem; text-align: center;
+}
+.circle-title { flex: 1; font-weight: 600; font-size: 0.95rem; }
+.circle-day { font-size: 0.8rem; color: var(--olive-deep); white-space: nowrap; }

@@ -269,10 +269,11 @@ function sessionPlaceHtml(s) {
     </div>`;
 }
 
-function sessionRowHtml(s, activityId) {
+function sessionRowHtml(s) {
   const weekday = s?.weekday || '';
   return `
-    <div class="session-crud-row" data-id="${s?.id || ''}" data-activity="${activityId}">
+    <div class="session-crud-row" data-id="${s?.id || ''}">
+      <button type="button" class="remove-session-row" title="Quitar esta sesión">×</button>
       <div class="crud-row">
         <div><label>Fecha (vacía si se repite cada semana)</label><input type="date" class="s-date" value="${s?.date || ''}"></div>
         <div><label>Se repite cada…</label>
@@ -290,11 +291,6 @@ function sessionRowHtml(s, activityId) {
         <div style="flex:0 0 140px;"><label>Precio</label><input type="text" class="s-price" value="${esc(s?.price)}" placeholder="ej. $10.000"></div>
       </div>
       <div class="crud-row">${sessionPlaceHtml(s)}</div>
-      <div class="crud-actions">
-        <button class="save">${s ? 'Guardar sesión' : 'Agregar sesión'}</button>
-        ${s ? `<button class="delete">Borrar</button>` : ''}
-        <span class="status"></span>
-      </div>
     </div>`;
 }
 
@@ -302,7 +298,10 @@ async function loadActividades() {
   const container = document.getElementById('tab-content');
   // Mantener abiertos los acordeones y actividades que estaban abiertos antes de recargar.
   const wasOpen = new Set([...container.querySelectorAll('details[open][data-key]')].map((d) => d.dataset.key));
-  if (openAfterReload) wasOpen.add(openAfterReload);
+  if (openAfterReload) {
+    wasOpen.add(openAfterReload);
+    wasOpen.delete('new'); // recién creada: se cierra el formulario de nueva actividad
+  }
   openAfterReload = null;
   if (!container.querySelector('.acc')) container.innerHTML = `<p class="loading-note">Cargando…</p>`;
 
@@ -329,29 +328,30 @@ async function loadActividades() {
   const catName = (id) => categories.find((c) => c.id === id)?.name || '';
 
   function activityFormHtml(a) {
-    const sessions = a ? a.sessions || [] : [];
+    const sessions = a?.sessions?.length ? a.sessions : [null];
     return `
-      <div class="crud-card" data-id="${a?.id || ''}">
+      <div class="crud-card activity-form" data-id="${a?.id || ''}">
         <div class="crud-row">
-          <div><label>Título</label><input type="text" class="f-title" value="${esc(a?.title)}"></div>
-          <div style="flex:0 0 190px;"><label>Categoría</label><select class="f-category">${catOptions(a?.category_id)}</select></div>
-          <div style="flex:0 0 110px;"><label>Formato</label>
-            <select class="f-format">
-              <option value="single" ${!a || a.format === 'single' ? 'selected' : ''}>única</option>
-              <option value="series" ${a?.format === 'series' ? 'selected' : ''}>serie</option>
-            </select>
-          </div>
-          <div class="crud-check"><label><input type="checkbox" class="f-visible" ${!a || a.visible ? 'checked' : ''}> visible</label></div>
+          <div><label>Título</label><input type="text" class="f-title title-input" value="${esc(a?.title)}" placeholder="ej. Retiro de Noviembre"></div>
+        </div>
+        <div class="crud-row">
+          <div><label>Categoría</label><select class="f-category">${a ? '' : '<option value="" selected>Elige una categoría…</option>'}${catOptions(a?.category_id)}</select></div>
+          <div class="crud-check"><label><input type="checkbox" class="f-visible" ${!a || a.visible ? 'checked' : ''}> visible en el sitio</label></div>
         </div>
         <div class="crud-row new-category" hidden>
           <div><label>Nombre de la categoría nueva</label><input type="text" class="f-new-category" placeholder="ej. Encuentros Matrimoniales"></div>
         </div>
         <div class="crud-row">
-          <div><label>Descripción</label><textarea class="f-desc">${esc(a?.description)}</textarea></div>
+          <div><label>Descripción</label><textarea class="f-desc" rows="3">${esc(a?.description)}</textarea></div>
         </div>
-        <div class="crud-row">
+        <div class="sessions-block">
+          <h4>Fecha, hora y lugar</h4>
+          <div class="sessions-list">${sessions.map(sessionRowHtml).join('')}</div>
+          <button type="button" class="add-btn add-session">+ agregar otra sesión</button>
+        </div>
+        <div class="crud-row" style="margin-top:14px;">
           <div>
-            <label>Foto</label>
+            <label>Foto (los círculos no muestran foto)</label>
             <div class="image-field">
               <img class="image-preview" src="${esc(previewSrc(a?.photo_url))}" ${a?.photo_url ? '' : 'hidden'}>
               <input type="file" accept="image/*" class="image-input">
@@ -361,20 +361,12 @@ async function loadActividades() {
           </div>
         </div>
         ${registrationBlockHtml(a)}
-        <div class="crud-actions">
+        <div class="crud-actions form-actions">
           <button class="save">${a ? 'Guardar' : 'Crear actividad'}</button>
-          ${a ? `<button class="delete">Borrar</button>` : ''}
+          ${a ? `<button class="delete">Borrar actividad</button>` : ''}
+          ${a?.slug ? `<a href="../#/actividad/${esc(a.slug)}" target="_blank" rel="noopener" class="view-link">ver en el sitio →</a>` : ''}
           <span class="status"></span>
         </div>
-        ${
-          a
-            ? `<div class="sessions-block">
-                 <h4>Sesiones (${sessions.length})</h4>
-                 <div class="sessions-list">${sessions.map((s) => sessionRowHtml(s, a.id)).join('')}</div>
-                 <button class="add-btn add-session">+ agregar sesión</button>
-               </div>`
-            : ''
-        }
       </div>`;
   }
 
@@ -429,71 +421,33 @@ async function loadActividades() {
   container.querySelectorAll('details[data-key]').forEach((d) => {
     if (wasOpen.has(d.dataset.key)) d.open = true;
   });
-  container.querySelectorAll('.crud-card').forEach(wireActivityCard);
-}
-
-function wireSessionRow(row) {
-  const id = row.dataset.id;
-  const activityId = row.dataset.activity;
-  const saveBtn = row.querySelector('.save');
-  const deleteBtn = row.querySelector('.delete');
-  const status = row.querySelector('.crud-actions .status');
-  const placeSelect = row.querySelector('.s-place');
-  placeSelect.addEventListener('change', () => {
-    row.querySelector('.s-place-other').hidden = placeSelect.value !== 'other';
-  });
-
-  saveBtn.addEventListener('click', async () => {
-    const date = row.querySelector('.s-date').value || null;
-    const weekday = row.querySelector('.s-weekday').value || null;
-    if (!date && !weekday) {
-      status.textContent = 'Indica una fecha o el día en que se repite.';
-      return;
-    }
-    const place = placeSelect.value;
-    const locationText = row.querySelector('.s-location-text').value.trim();
-    if (place === 'other' && !locationText) {
-      status.textContent = 'Escribe dónde es la sesión.';
-      return;
-    }
-    const payload = {
-      activity_id: activityId,
-      date,
-      weekday: date ? null : weekday,
-      time_start: row.querySelector('.s-start').value || null,
-      time_end: row.querySelector('.s-end').value || null,
-      topic: row.querySelector('.s-topic').value.trim() || null,
-      speaker: row.querySelector('.s-speaker').value.trim() || null,
-      price: row.querySelector('.s-price').value.trim() || null,
-      location_id: place === 'polonia' ? poloniaId : null,
-      location_text: place === 'other' ? locationText : place === 'polonia' && !poloniaId ? 'Polonia' : null,
-    };
-    saveBtn.disabled = true;
-    status.textContent = 'Guardando…';
-    const { error } = await db.save('sessions', { id, ...payload });
-    saveBtn.disabled = false;
-    if (error) status.textContent = 'Error: ' + error.message;
-    else loadActividades();
-  });
-
-  deleteBtn?.addEventListener('click', async () => {
-    if (!confirm('¿Borrar esta sesión?')) return;
-    const { error } = await db.remove('sessions', id);
-    if (error) status.textContent = 'Error: ' + error.message;
-    else loadActividades();
-  });
+  container.querySelectorAll('.activity-form').forEach(wireActivityCard);
 }
 
 function wireActivityCard(card) {
   const id = card.dataset.id;
-  const saveBtn = card.querySelector(':scope > .crud-actions .save');
-  const deleteBtn = card.querySelector(':scope > .crud-actions .delete');
-  const status = card.querySelector(':scope > .crud-actions .status');
+  const saveBtn = card.querySelector('.form-actions .save');
+  const deleteBtn = card.querySelector('.form-actions .delete');
+  const status = card.querySelector('.form-actions .status');
   const categorySelect = card.querySelector('.f-category');
   const newCategoryRow = card.querySelector('.new-category');
   categorySelect.addEventListener('change', () => {
     newCategoryRow.hidden = categorySelect.value !== NEW_CATEGORY;
     if (!newCategoryRow.hidden) card.querySelector('.f-new-category').focus();
+  });
+
+  // Sesiones: agregar / quitar filas y mostrar "¿Dónde?" solo para otro lugar
+  card.addEventListener('change', (e) => {
+    if (e.target.matches('.s-place')) {
+      e.target.closest('.session-crud-row').querySelector('.s-place-other').hidden = e.target.value !== 'other';
+    }
+  });
+  card.addEventListener('click', (e) => {
+    if (e.target.matches('.add-session')) {
+      card.querySelector('.sessions-list').insertAdjacentHTML('beforeend', sessionRowHtml(null));
+    } else if (e.target.matches('.remove-session-row')) {
+      e.target.closest('.session-crud-row').remove();
+    }
   });
 
   const fileInput = card.querySelector('.image-input');
@@ -515,6 +469,31 @@ function wireActivityCard(card) {
     }
   });
 
+  function readSessions() {
+    const sessions = [];
+    for (const row of card.querySelectorAll('.session-crud-row')) {
+      const date = row.querySelector('.s-date').value;
+      const place = row.querySelector('.s-place').value;
+      const locationText = row.querySelector('.s-location-text').value.trim();
+      if (place === 'other' && !locationText && (date || row.querySelector('.s-weekday').value)) {
+        return { error: 'Escribe dónde es la sesión (o elige Polonia).' };
+      }
+      sessions.push({
+        id: row.dataset.id,
+        date,
+        weekday: date ? '' : row.querySelector('.s-weekday').value,
+        time_start: row.querySelector('.s-start').value,
+        time_end: row.querySelector('.s-end').value,
+        topic: row.querySelector('.s-topic').value.trim(),
+        speaker: row.querySelector('.s-speaker').value.trim(),
+        price: row.querySelector('.s-price').value.trim(),
+        location_id: place === 'polonia' ? poloniaId || '' : '',
+        location_text: place === 'other' ? locationText : place === 'polonia' && !poloniaId ? 'Polonia' : '',
+      });
+    }
+    return { sessions };
+  }
+
   saveBtn.addEventListener('click', async () => {
     const title = card.querySelector('.f-title').value.trim();
     if (!title) {
@@ -524,6 +503,15 @@ function wireActivityCard(card) {
     const registration = readRegistration(card);
     if (registration.error) {
       status.textContent = registration.error;
+      return;
+    }
+    const { sessions, error: sessionError } = readSessions();
+    if (sessionError) {
+      status.textContent = sessionError;
+      return;
+    }
+    if (!categorySelect.value) {
+      status.textContent = 'Elige una categoría (o crea una nueva).';
       return;
     }
     saveBtn.disabled = true;
@@ -541,16 +529,17 @@ function wireActivityCard(card) {
       categoryId = created.id;
     }
 
-    const payload = {
+    const body = {
+      id,
       title,
       category_id: categoryId,
-      format: card.querySelector('.f-format').value,
       visible: card.querySelector('.f-visible').checked,
       description: card.querySelector('.f-desc').value.trim() || null,
       photo_url: photoField.value.trim() || null,
       ...registration.values,
+      sessions,
     };
-    const { data, error } = await db.save('activities', { id, ...payload });
+    const { data, error } = await attempt(api('save_activity', { method: 'POST', body }));
     saveBtn.disabled = false;
     if (error) {
       status.textContent = 'Error: ' + error.message;
@@ -558,10 +547,12 @@ function wireActivityCard(card) {
     }
     if (!id) {
       flashMessage = data?.notified
-        ? `Actividad creada. Se envió una notificación a ${data.notified} dispositivo${data.notified > 1 ? 's' : ''}. Agrégale sus sesiones abajo.`
-        : 'Actividad creada. Agrégale sus sesiones abajo.';
-      openAfterReload = 'a-' + data.id;
+        ? `Actividad creada. Se envió una notificación a ${data.notified} dispositivo${data.notified > 1 ? 's' : ''}.`
+        : 'Actividad creada.';
+    } else {
+      flashMessage = `Guardado ✓ «${title}»`;
     }
+    openAfterReload = 'a-' + data.id;
     loadActividades();
   });
 
@@ -572,16 +563,7 @@ function wireActivityCard(card) {
     else loadActividades();
   });
 
-  card.querySelectorAll('.session-crud-row').forEach(wireSessionRow);
   wireRegistration(card);
-
-  card.querySelector('.add-session')?.addEventListener('click', () => {
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = sessionRowHtml(null, id);
-    const row = wrapper.firstElementChild;
-    card.querySelector('.sessions-list').appendChild(row);
-    wireSessionRow(row);
-  });
 }
 
 // ---------------------------------------------------------------------------

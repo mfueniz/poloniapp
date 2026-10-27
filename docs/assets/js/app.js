@@ -3,7 +3,7 @@
 // Home: frase + bajada → banner de la app (solo celular) → actividades próximas → Para rezar hoy.
 
 import { api } from './api.js';
-import { renderAppBanner } from './pwa.js?v=20261028';
+import { renderAppBanner } from './pwa.js?v=20261029';
 
 // Raíz real del sitio (docs/), calculada desde la ubicación de este script.
 const ASSETS_BASE = new URL('../../', import.meta.url).href;
@@ -14,7 +14,7 @@ function assetUrl(relPath) {
 const MARK = assetUrl('assets/img/favicon.svg');
 
 const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']; // índice = Date.getDay()
-const HOME_LIMIT = 6;
+const HOME_LIMIT = 4; // actividades en el inicio, aparte de los círculos
 
 const ICONS = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>',
@@ -197,11 +197,28 @@ function goBack(fallbackHash) {
 // ---------------------------------------------------------------------------
 // Componentes
 // ---------------------------------------------------------------------------
+// URL de una actividad con su nombre (#/actividad/retiro-de-noviembre); el id sigue funcionando
+// para links antiguos.
+const activityHref = (a) => `#/actividad/${encodeURIComponent(a.slug || a.id)}`;
+// Los círculos no llevan imagen: solo título y hora.
+const isCircle = (a) => state.categoriesById[a.category_id]?.slug === 'circulos';
+
+function circleRow(a, occ, { showDay }) {
+  const time = hhmm(occ.session.time_start);
+  const day = showDay ? fmtDay(occ.date) : '';
+  return `
+    <a class="circle-row" href="${activityHref(a)}">
+      <span class="circle-time">${esc(time || '—')}</span>
+      <span class="circle-title">${esc(a.title)}</span>
+      ${day ? `<span class="circle-day">${esc(day)}</span>` : ''}
+    </a>`;
+}
+
 function activityCard(a, occ) {
   const category = state.categoriesById[a.category_id];
   const isToday = occ && occ.date === isoDate(new Date());
   return `
-    <a class="activity-card" href="#/actividad/${a.id}">
+    <a class="activity-card" href="${activityHref(a)}">
       ${
         a.photo_url
           ? `<div class="photo" style="background-image:url('${esc(assetUrl(a.photo_url))}')">${isToday ? '<span class="badge-today">HOY</span>' : ''}</div>`
@@ -221,10 +238,14 @@ function activityListRow(a) {
   const when = occ ? (occ.recurring ? fmtSession(occ.session) : fmtOccurrence(occ)) : first ? fmtSession(first) : '';
   const place = placeOf(occ?.session);
   return `
-    <a class="activity-row" href="#/actividad/${a.id}">
-      <div class="thumb ${a.photo_url ? '' : 'placeholder'}" style="${a.photo_url ? `background-image:url('${esc(assetUrl(a.photo_url))}')` : ''}">
+    <a class="activity-row" href="${activityHref(a)}">
+      ${
+        isCircle(a)
+          ? ''
+          : `<div class="thumb ${a.photo_url ? '' : 'placeholder'}" style="${a.photo_url ? `background-image:url('${esc(assetUrl(a.photo_url))}')` : ''}">
         ${a.photo_url ? '' : `<img src="${MARK}" alt="">`}
-      </div>
+      </div>`
+      }
       <div>
         <p class="title">${esc(a.title)}</p>
         <p class="when">${esc(when)}</p>
@@ -338,18 +359,28 @@ function renderHome() {
       activeCategories.map((c) => `<button class="chip" data-category="${c.id}">${esc(c.name)}</button>`).join('')
     : '';
 
-  // "Todas": la más cercana primero, y las semanales (círculos) solo el día que tocan.
-  // Una categoría: todas sus próximas, incluidas las semanales de otros días.
+  // Círculos: solo título y hora, en una lista aparte ("Todas": solo los de hoy; filtro
+  // Círculos: todos, con el día). Resto: las 4 más próximas, con imagen.
   function renderActivities(categoryId = '') {
     const list = categoryId ? state.activities.filter((a) => a.category_id === categoryId) : state.activities;
-    const upcoming = list
-      .map((a) => ({ a, occ: nextOccurrence(a, { onlyTodayRecurring: !categoryId }) }))
-      .filter((x) => x.occ)
-      .sort((x, y) => x.occ.key.localeCompare(y.occ.key))
-      .slice(0, categoryId ? undefined : HOME_LIMIT);
-    document.getElementById('home-activities').innerHTML = upcoming.length
-      ? `<div class="activities-grid">${upcoming.map((x) => activityCard(x.a, x.occ)).join('')}</div>`
-      : `<p class="empty-note">No hay actividades para hoy. <a href="#/actividades">Ver todas las actividades</a></p>`;
+    const withNext = (items, opts) =>
+      items
+        .map((a) => ({ a, occ: nextOccurrence(a, opts) }))
+        .filter((x) => x.occ)
+        .sort((x, y) => x.occ.key.localeCompare(y.occ.key));
+    const circles = withNext(list.filter(isCircle), { onlyTodayRecurring: !categoryId });
+    const others = withNext(list.filter((a) => !isCircle(a))).slice(0, HOME_LIMIT);
+    const circlesHtml = circles.length
+      ? `<div class="circle-list">
+           <p class="circle-head">${categoryId ? 'Círculos' : 'Círculos de hoy'}</p>
+           ${circles.map((x) => circleRow(x.a, x.occ, { showDay: !!categoryId })).join('')}
+         </div>`
+      : '';
+    const othersHtml = others.length ? `<div class="activities-grid">${others.map((x) => activityCard(x.a, x.occ)).join('')}</div>` : '';
+    document.getElementById('home-activities').innerHTML =
+      circlesHtml || othersHtml
+        ? circlesHtml + othersHtml
+        : `<p class="empty-note">No hay actividades próximas. <a href="#/actividades">Ver todas las actividades</a></p>`;
   }
 
   renderActivities();
@@ -436,7 +467,7 @@ function renderCategoria(slug) {
 function renderActividad(id) {
   renderChrome('actividades');
   const view = document.getElementById('view');
-  const activity = state.activities.find((a) => a.id === id);
+  const activity = state.activities.find((a) => a.slug === id || a.id === id);
   if (!activity) {
     view.innerHTML = `<p class="loading-note">Actividad no encontrada. <a href="#/actividades">Volver</a></p>`;
     return;
@@ -458,7 +489,9 @@ function renderActividad(id) {
       ${category ? `<a class="see-category" href="#/actividades/${category.slug}">Ver todo: ${esc(category.name)} →</a>` : ''}
     </nav>
     ${
-      activity.photo_url
+      isCircle(activity)
+        ? ''
+        : activity.photo_url
         ? `<div class="detail-photo" style="background-image:url('${esc(assetUrl(activity.photo_url))}')"></div>`
         : `<div class="detail-photo placeholder"><img src="${MARK}" alt=""></div>`
     }
@@ -546,7 +579,7 @@ function projectSessionRow(item) {
   const s = item.session;
   const place = placeOf(s);
   return `
-    <a class="session-row link" href="#/actividad/${item.activity.id}">
+    <a class="session-row link" href="${activityHref(item.activity)}">
       <p class="when">${esc(fmtSession(s))}</p>
       ${s.topic ? `<p class="topic">${esc(s.topic)}</p>` : `<p class="topic">${esc(item.activity.title)}</p>`}
       ${s.speaker ? `<p class="speaker">Con ${esc(s.speaker)}</p>` : ''}
@@ -668,7 +701,7 @@ function route() {
   if (parts.length === 0) renderHome();
   else if (parts[0] === 'actividades' && parts.length === 1) renderCategorias();
   else if (parts[0] === 'actividades' && parts.length === 2) renderCategoria(parts[1]);
-  else if (parts[0] === 'actividad' && parts[1]) renderActividad(parts[1]);
+  else if (parts[0] === 'actividad' && parts[1]) renderActividad(decodeURIComponent(parts[1]));
   else if (parts[0] === 'quienes-somos' && parts[1] === 'proyectos' && parts[2]) renderProyecto(parts[2]);
   else if (parts[0] === 'quienes-somos') renderQuienesSomos();
   else renderHome();

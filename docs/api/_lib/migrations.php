@@ -111,7 +111,48 @@ function migrations(): array
                ('confesiones.texto', 'Confesiones', 'Agenda para confesiones o hablar con un sacerdote')",
             "UPDATE site_content SET value = 'https://poloniasub35.setmore.com/' WHERE `key` = 'confesiones.booking_url' AND value = 'https://poloniasub35.setmore.com'",
         ],
+
+        // 2026-10-27 (c): URL de cada actividad con su nombre (#/actividad/retiro-de-noviembre) y
+        // círculos sin imagen, con título sin día ni hora (la hora se muestra aparte).
+        5 => [
+            "ALTER TABLE activities ADD COLUMN slug VARCHAR(191) NULL AFTER title, ADD UNIQUE KEY activities_slug (slug)",
+            "UPDATE activities a JOIN categories c ON c.id = a.category_id SET a.photo_url = NULL WHERE c.slug = 'circulos'",
+            'rename_circles_and_fill_slugs',
+        ],
     ];
+}
+
+/** "Círculo — martes 08:00" -> "Círculo en Polonia", y slug para todas las actividades. */
+function rename_circles_and_fill_slugs(): void
+{
+    $circles = db()->query(
+        "SELECT a.id, COALESCE(l.name, s.location_text) AS place
+         FROM activities a
+         JOIN categories c ON c.id = a.category_id AND c.slug = 'circulos'
+         LEFT JOIN sessions s ON s.activity_id = a.id
+         LEFT JOIN locations l ON l.id = s.location_id
+         WHERE a.title LIKE 'Círculo — %'"
+    )->fetchAll();
+    $rename = db()->prepare('UPDATE activities SET title = ? WHERE id = ?');
+    foreach ($circles as $c) {
+        $rename->execute([$c['place'] ? 'Círculo en ' . $c['place'] : 'Círculo', $c['id']]);
+    }
+    $setSlug = db()->prepare('UPDATE activities SET slug = ? WHERE id = ?');
+    $firstSession = db()->prepare('SELECT weekday, date, time_start FROM sessions WHERE activity_id = ? ORDER BY date, time_start LIMIT 1');
+    // Primero se reserva el nombre "limpio" para quien lo tenga único; los repetidos (ej. varios
+    // "Círculo en Polonia") llevan día y hora: circulo-en-polonia-martes-1930.
+    $all = db()->query('SELECT id, title FROM activities ORDER BY created_at, title')->fetchAll();
+    $count = array_count_values(array_map(function ($a) {
+        return slugify($a['title']);
+    }, $all));
+    foreach ($all as $a) {
+        $firstSession->execute([$a['id']]);
+        $session = $firstSession->fetch() ?: null;
+        $slug = $count[slugify($a['title'])] > 1 && $session
+            ? unique_slug('activities', [$a['title'] . ' ' . ($session['weekday'] ?: $session['date']) . ' ' . str_replace(':', '', substr((string) $session['time_start'], 0, 5))], $a['id'])
+            : activity_slug($a['id'], $a['title'], $session);
+        $setSlug->execute([$slug, $a['id']]);
+    }
 }
 
 /** Contenido inicial de Proyectos (después se edita en el panel, pestaña Proyectos). */
