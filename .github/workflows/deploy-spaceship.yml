@@ -110,3 +110,26 @@ jobs:
           local-dir: ./docs/
           server-dir: ${{ vars.FTP_SERVER_DIR || 'public_html/' }}
           security: ${{ vars.FTP_SECURITY || 'strict' }}
+
+      # Comprobación después de subir: el inicio, una dirección limpia (pasa por .htaccess +
+      # page.php) y la API tienen que responder. Si algo falla, el deploy queda en rojo.
+      - name: Comprobar el sitio publicado
+        if: steps.check.outputs.ready == 'true'
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://poloniapp.cl' }}
+        run: |
+          check() {
+            local path="$1" expect="$2"
+            local body code
+            body=$(curl -sS --max-time 30 -w '\n%{http_code}' "$SITE_URL$path") || { echo "::error::$path no responde"; return 1; }
+            code=$(tail -n1 <<<"$body")
+            if [ "$code" != "200" ] || ! grep -q -- "$expect" <<<"$body"; then
+              echo "::error::$path respondió HTTP $code o sin el contenido esperado ($expect)"
+              return 1
+            fi
+            echo "OK $path"
+          }
+          check / 'og:title'
+          check /actividades '<title>Actividades — Poloniapp</title>'
+          check /quienes-somos '<title>Quiénes somos — Poloniapp</title>'
+          check '/api/?action=status' 'needs_setup'
