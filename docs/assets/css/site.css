@@ -1,17 +1,23 @@
 /* Poloniapp — sitio público.
    Paleta (Adobe Color "My Color Theme"): #42576B pizarra · #99251F vino · #85BAEA celeste ·
    #EB271C rojo · #767865 oliva. Fondo blanco. Tipografía: Google Sans (ver fonts.css).
-   Contraste: pizarra, vino y oliva sirven para texto sobre blanco; celeste y rojo solo
-   como acento (fondos, bordes, puntos), nunca para texto chico. */
+   Los protagonistas de la interfaz son los colores brillantes: rojo para botones y links,
+   celeste para filtros, tarjetas y fondos. El vino queda solo en el logo.
+   Contraste: el rojo de interfaz (#E2241A, el #EB271C apenas más oscuro) pasa AA con texto
+   blanco y como texto sobre blanco; sobre celeste el texto va en pizarra oscuro. */
 
 :root {
   --slate: #42576B;
   --slate-deep: #2B3A48;      /* pizarra oscurecido para texto largo */
-  --wine: #99251F;
-  --wine-dark: #7D1E19;
   --sky: #85BAEA;
+  --sky-mid: #A9CFF1;
   --sky-soft: #EDF5FD;
-  --red: #EB271C;
+  --red: #EB271C;             /* acento: puntos, íconos, degradados */
+  --red-ui: #E2241A;          /* botones y links (texto blanco encima pasa AA) */
+  --red-dark: #C41E15;
+  --red-soft: #FDECEA;
+  --yellow: #E3BE2A;          /* amarillo de Puentes, solo como acento */
+  --yellow-soft: #FFF6D6;
   --olive: #767865;
   --olive-deep: #5E6151;      /* oliva para texto sobre fondos tintados */
   --bg: #FFFFFF;
@@ -104,7 +110,7 @@ button { font-family: var(--font); }
   font-weight: 500;
 }
 .menu-panel a:hover { background: var(--surface); }
-.menu-panel a.active { color: var(--wine); background: var(--surface); }
+.menu-panel a.active { color: var(--red-ui); background: var(--surface); }
 @keyframes menu-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
 /* --- Hero --- */
@@ -123,7 +129,7 @@ button { font-family: var(--font); }
   width: 44px; height: 4px;
   margin-top: 14px;
   border-radius: 4px;
-  background: linear-gradient(90deg, var(--wine), var(--red));
+  background: linear-gradient(90deg, var(--red), var(--sky));
 }
 .hero p { margin: 0; color: var(--olive); font-size: 1.02rem; line-height: 1.45; }
 
@@ -169,14 +175,14 @@ button { font-family: var(--font); }
   padding: 11px 20px;
   border: none;
   border-radius: var(--radius-pill);
-  background: var(--wine);
+  background: var(--red-ui);
   color: #fff;
   font-size: 0.92rem;
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
 }
-.btn:hover { background: var(--wine-dark); }
+.btn:hover { background: var(--red-dark); }
 .btn.block { width: 100%; padding: 14px 20px; font-size: 0.98rem; }
 .btn.ghost { background: transparent; color: var(--slate); border: 1px solid var(--line); }
 
@@ -223,7 +229,7 @@ button { font-family: var(--font); }
   color: var(--slate);
 }
 .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.section-head a { color: var(--wine); text-decoration: none; font-size: 0.88rem; font-weight: 600; white-space: nowrap; }
+.section-head a { color: var(--red-ui); text-decoration: none; font-size: 0.88rem; font-weight: 600; white-space: nowrap; }
 
 /* --- Chips de filtro --- */
 .chips {
@@ -244,7 +250,8 @@ button { font-family: var(--font); }
   cursor: pointer;
   white-space: nowrap;
 }
-.chip.active { background: var(--slate); border-color: var(--slate); color: #fff; }
+.chip.active { background: var(--sky); border-color: var(--sky); color: var(--slate-deep); font-weight: 700; }
+.chip:not(.active):hover { border-color: var(--sky); background: var(--sky-soft); }
 .subchips {
   padding: 10px 20px 4px;
   display: flex; gap: 8px;
@@ -290,14 +297,14 @@ button { font-family: var(--font); }
 .activity-card .photo.placeholder img { width: 38%; opacity: 0.9; }
 .activity-card .badge-today {
   position: absolute; top: 10px; left: 10px;
-  background: var(--red); color: #fff;
+  background: var(--red-ui); color: #fff;
   font-size: 0.7rem; font-weight: 700; letter-spacing: 0.02em;
   padding: 3px 9px; border-radius: var(--radius-pill);
 }
 .activity-card .info { padding: 10px 12px 12px; }
 .activity-card .cat { margin: 0 0 3px; font-size: 0.72rem; color: var(--olive); font-weight: 500; }
 .activity-card .title { margin: 0 0 4px; font-size: 0.9rem; font-weight: 600; line-height: 1.25; }
-.activity-card .when { margin: 0; font-size: 0.78rem; color: var(--wine); font-weight: 600; }
+.activity-card .when { margin: 0; font-size: 0.78rem; color: var(--red-ui); font-weight: 600; }
 
 .empty-note {
   margin: 14px 20px 0;
@@ -308,13 +315,13 @@ button { font-family: var(--font); }
   font-size: 0.9rem;
   line-height: 1.4;
 }
-.empty-note a { color: var(--wine); font-weight: 600; text-decoration: none; }
+.empty-note a { color: var(--red-ui); font-weight: 600; text-decoration: none; }
 
 .see-all {
   display: block;
   text-align: right;
   padding: 14px 20px 0;
-  color: var(--wine);
+  color: var(--red-ui);
   text-decoration: none;
   font-size: 0.9rem;
   font-weight: 600;
@@ -358,7 +365,7 @@ button { font-family: var(--font); }
   line-height: 1.35;
 }
 .prayer-list a:hover { background: var(--surface); }
-.prayer-list a svg { flex: 0 0 auto; width: 18px; height: 18px; color: var(--wine); }
+.prayer-list a svg { flex: 0 0 auto; width: 18px; height: 18px; color: var(--red-ui); }
 .prayer-list .skeleton {
   height: 14px; margin: 18px; border-radius: 6px;
   background: linear-gradient(90deg, var(--surface), var(--line), var(--surface));
@@ -376,7 +383,7 @@ button { font-family: var(--font); }
 }
 .about-teaser h2 { font-size: 1.1rem; margin: 0 0 8px; color: var(--slate); }
 .about-teaser p { margin: 0 0 12px; font-size: 0.92rem; line-height: 1.45; color: var(--olive-deep); }
-.about-teaser a { color: var(--wine); text-decoration: none; font-weight: 600; font-size: 0.9rem; }
+.about-teaser a { color: var(--red-ui); text-decoration: none; font-weight: 600; font-size: 0.9rem; }
 
 /* --- Barra inferior --- */
 .tabbar {
@@ -403,10 +410,10 @@ button { font-family: var(--font); }
   padding: 4px 0;
 }
 .tabbar a svg { width: 22px; height: 22px; }
-.tabbar a.active { color: var(--wine); font-weight: 700; }
+.tabbar a.active { color: var(--red-ui); font-weight: 700; }
 
 .loading-note { padding: 20px; color: var(--olive); font-size: 0.9rem; }
-.loading-note a { color: var(--wine); }
+.loading-note a { color: var(--red-ui); }
 
 /* --- Grilla de categorías (Actividades) --- */
 .categories-grid {
@@ -453,7 +460,7 @@ button { font-family: var(--font); }
 }
 .activity-row .thumb.placeholder img { width: 50%; }
 .activity-row .title { margin: 0 0 3px; font-size: 0.95rem; font-weight: 600; }
-.activity-row .when { margin: 0; font-size: 0.82rem; color: var(--wine); font-weight: 500; }
+.activity-row .when { margin: 0; font-size: 0.82rem; color: var(--red-ui); font-weight: 500; }
 .activity-row .meta { margin: 2px 0 0; font-size: 0.8rem; color: var(--olive); }
 
 /* --- Barra superior de páginas internas (volver / ver todo) --- */
@@ -470,24 +477,24 @@ button { font-family: var(--font); }
   text-decoration: none;
   cursor: pointer;
 }
-.page-nav .see-category { color: var(--wine); text-align: right; }
+.page-nav .see-category { color: var(--red-ui); text-align: right; }
 
 /* --- Reserva externa (Confesiones → Setmore) --- */
 .booking-card {
   display: block;
   margin: 14px 20px 20px;
   padding: 22px;
-  background: var(--slate);
+  background: linear-gradient(135deg, var(--sky) 0%, var(--sky-mid) 100%);
   border-radius: var(--radius-card);
-  color: #fff;
+  color: var(--slate-deep);
   text-decoration: none;
 }
 .booking-card .title { font-size: 1.15rem; font-weight: 700; margin: 0 0 6px; }
-.booking-card .sub { font-size: 0.9rem; opacity: 0.9; margin: 0 0 16px; line-height: 1.4; }
+.booking-card .sub { font-size: 0.95rem; margin: 0 0 16px; line-height: 1.4; }
 .booking-card .cta {
   display: inline-block;
-  background: #fff;
-  color: var(--wine);
+  background: var(--red-ui);
+  color: #fff;
   padding: 10px 20px;
   border-radius: var(--radius-pill);
   font-size: 0.9rem;
@@ -521,7 +528,7 @@ button { font-family: var(--font); }
 .session-row .topic { margin: 0 0 2px; font-size: 0.9rem; }
 .session-row .speaker { margin: 0 0 4px; font-size: 0.85rem; color: var(--olive-deep); }
 .session-row .location { margin: 0; font-size: 0.82rem; color: var(--olive-deep); }
-.session-row .price { margin: 6px 0 0; font-size: 0.85rem; font-weight: 700; color: var(--wine); }
+.session-row .price { margin: 6px 0 0; font-size: 0.85rem; font-weight: 700; color: var(--red-ui); }
 .detail-cta { padding: 20px 20px 4px; }
 
 /* --- Quiénes somos (vista completa) --- */
@@ -552,7 +559,7 @@ button { font-family: var(--font); }
   border-radius: 50%;
   background: var(--red);
 }
-.link-arrow { color: var(--wine); font-weight: 600; text-decoration: none; font-size: 0.9rem; display: inline-block; margin-top: 8px; }
+.link-arrow { color: var(--red-ui); font-weight: 600; text-decoration: none; font-size: 0.9rem; display: inline-block; margin-top: 8px; }
 
 /* --- Bubble chat (WhatsApp) --- */
 .chat-bubble {
@@ -588,6 +595,7 @@ button { font-family: var(--font); }
 .project-teaser {
   display: block;
   padding: 20px;
+  border-top: 4px solid var(--sky) !important;
   border-radius: var(--radius-card);
   border: 1px solid var(--line);
   background: #fff;
@@ -601,8 +609,8 @@ button { font-family: var(--font); }
 .project-teaser .pt-title { margin: 0 0 4px; font-size: 1.2rem; font-weight: 700; color: var(--slate); }
 .project-teaser .pt-tag { margin: 0 0 10px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--olive); }
 .project-teaser .pt-summary { margin: 0 0 12px; font-size: 0.95rem; line-height: 1.5; }
-.project-teaser strong, .project-summary strong { color: var(--wine); }
-.project-teaser .pt-more { color: var(--wine); font-weight: 700; font-size: 0.9rem; }
+.project-teaser strong, .project-summary strong { color: var(--red-ui); }
+.project-teaser .pt-more { color: var(--red-ui); font-weight: 700; font-size: 0.9rem; }
 
 .project-hero { padding: 8px 20px 4px; text-align: center; }
 .project-hero h1 { margin: 6px 0 8px; font-size: 1.6rem; color: var(--slate); }
@@ -622,26 +630,33 @@ button { font-family: var(--font); }
 .project-section { padding: 22px 20px 4px; }
 .project-section h2 { margin: 0 0 12px; font-size: 1.2rem; color: var(--slate); }
 .project-text { font-size: 0.95rem; line-height: 1.6; }
-.project-text a { color: var(--wine); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.project-text a { color: var(--red-ui); font-weight: 600; text-decoration: none; white-space: nowrap; }
 .project-cards { display: grid; gap: 12px; }
 .project-card {
   position: relative;
   overflow: hidden;
   border-radius: var(--radius-card);
   padding: 18px 18px 16px;
-  color: #fff;
+  color: var(--slate-deep);
+  border-top: 5px solid var(--accent);
+  background: var(--accent-soft);
 }
 .project-card::after {
-  content: ''; position: absolute; right: -30px; top: -30px;
+  content: ''; position: absolute; right: -34px; top: -34px;
   width: 110px; height: 110px; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--accent);
+  opacity: 0.18;
 }
+.project-card h3 { color: var(--slate); }
 .project-card h3 { margin: 0 0 6px; font-size: 1.05rem; letter-spacing: 0.04em; text-transform: uppercase; }
 .project-card p { margin: 0; font-size: 0.92rem; line-height: 1.45; }
-.project-card .meta { margin-top: 12px; font-weight: 700; font-size: 0.82rem; opacity: 0.95; }
-.tone-0 { background: #8F6A0A; }   /* dorado (Puentes · familia) */
-.tone-1 { background: var(--slate-deep); }
-.tone-2 { background: var(--wine); }
+.project-card .meta { margin-top: 12px; font-weight: 700; font-size: 0.82rem; color: var(--slate); }
+.project-card.tone-0 { --accent: var(--yellow); --accent-soft: var(--yellow-soft); }
+.project-card.tone-1 { --accent: var(--sky); --accent-soft: var(--sky-soft); }
+.project-card.tone-2 { --accent: var(--red); --accent-soft: var(--red-soft); }
+.pill.tone-0 { background: var(--red-ui); color: #fff; }
+.pill.tone-1 { background: var(--sky); color: var(--slate-deep); }
+.pill.tone-2 { background: var(--slate); color: #fff; }
 .project-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
 .pill {
   display: inline-block;
@@ -656,3 +671,24 @@ button { font-family: var(--font); }
 .session-row.link { display: block; text-decoration: none; color: inherit; }
 .session-row.link:hover { background: var(--sky-soft); }
 .sessions-list.past .session-row { border-left-color: var(--line); }
+
+[hidden] { display: none !important; }
+
+/* --- Confesiones (inicio) --- */
+.confession-card {
+  margin: 30px 20px 0;
+  padding: 22px 20px;
+  border-radius: var(--radius-card);
+  background: linear-gradient(135deg, var(--sky) 0%, var(--sky-mid) 100%);
+  color: var(--slate-deep);
+  position: relative;
+  overflow: hidden;
+}
+.confession-card::after {
+  content: ''; position: absolute; right: -40px; bottom: -40px;
+  width: 140px; height: 140px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+.confession-card h2 { margin: 0 0 6px; font-size: 1.25rem; }
+.confession-card p { margin: 0 0 16px; font-size: 1rem; line-height: 1.45; max-width: 30ch; }
+.confession-card .btn { position: relative; z-index: 1; }

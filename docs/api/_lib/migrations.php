@@ -100,6 +100,17 @@ function migrations(): array
 
             'seed_projects',
         ],
+
+        // 2026-10-27 (b): Encuentros Matrimoniales también en el inicio, sección Confesiones en
+        // el inicio (textos editables en Contenido fijo) y logo de Puentes en alta resolución.
+        4 => [
+            "UPDATE projects SET show_on_home = 1 WHERE slug = 'encuentros-matrimoniales'",
+            "UPDATE projects SET logo_url = 'assets/img/proyectos/puentes.png' WHERE logo_url = 'assets/img/proyectos/puentes-logo.png'",
+            "INSERT IGNORE INTO site_content (`key`, section, value) VALUES
+               ('confesiones.titulo', 'Confesiones', 'Confesiones'),
+               ('confesiones.texto', 'Confesiones', 'Agenda para confesiones o hablar con un sacerdote')",
+            "UPDATE site_content SET value = 'https://poloniasub35.setmore.com/' WHERE `key` = 'confesiones.booking_url' AND value = 'https://poloniasub35.setmore.com'",
+        ],
     ];
 }
 
@@ -113,7 +124,7 @@ function seed_projects(): void
             'title' => 'Puentes',
             'tagline' => 'Santiago Centro',
             'summary' => 'Somos un proyecto que trabaja en torno a **3 pilares fundamentales** para fortalecer a las familias de Santiago Centro y juntos acercarnos más a Cristo.',
-            'logo_url' => 'assets/img/proyectos/puentes-logo.png',
+            'logo_url' => 'assets/img/proyectos/puentes.png',
             'sections' => [
                 [
                     'title' => 'Nuestros pilares',

@@ -3,7 +3,7 @@
 // Home: frase + bajada → banner de la app (solo celular) → actividades próximas → Para rezar hoy.
 
 import { api } from './api.js';
-import { renderAppBanner } from './pwa.js?v=20261027';
+import { renderAppBanner } from './pwa.js?v=20261028';
 
 // Raíz real del sitio (docs/), calculada desde la ubicación de este script.
 const ASSETS_BASE = new URL('../../', import.meta.url).href;
@@ -303,6 +303,15 @@ function renderHome() {
     <div id="home-activities"></div>
     <a class="see-all" href="#/actividades">Ver todas las actividades →</a>
     ${prayerSection()}
+    ${
+      state.content['confesiones.booking_url']
+        ? `<section class="confession-card">
+             <h2>${esc(state.content['confesiones.titulo'] || 'Confesiones')}</h2>
+             <p>${esc(state.content['confesiones.texto'] || 'Agenda para confesiones o hablar con un sacerdote')}</p>
+             <a class="btn" href="${esc(state.content['confesiones.booking_url'])}" target="_blank" rel="noopener">Agendar →</a>
+           </section>`
+        : ''
+    }
     ${
       homeProjects.length
         ? `<section class="section" style="padding-top:30px;"><h2 class="section-title" style="margin:0;">Proyectos</h2></section>

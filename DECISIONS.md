@@ -4,6 +4,16 @@ Log vivo de decisiones de diseño, UX/UI y estructura de contenido tomadas en se
 
 ---
 
+## 2026-10-27 — Ronda 11: colores brillantes, Confesiones y Encuentros en el inicio
+
+- La interfaz deja el rojo vino (se sentía anticuado) y usa los colores brillantes de la paleta: rojo para botones y links (#E2241A, el #EB271C apenas más oscuro para que el texto blanco pase AA) y celeste para filtros activos, tarjetas y fondos. El vino queda solo en el logo.
+- Tarjetas de proyecto en fondos claros con acento (amarillo de Puentes, celeste, rojo); pills de ayuda en rojo / celeste / pizarra.
+- Inicio: sección Confesiones ("Agenda para confesiones o hablar con un sacerdote" → Setmore; título, texto y link editables en Contenido fijo) y Encuentros Matrimoniales junto a Puentes en Proyectos.
+- Logo de Puentes reemplazado por la versión en alta resolución (`assets/img/proyectos/puentes.png`).
+- Panel: el campo "Nombre de la categoría nueva" solo aparece al elegir "+ Nueva categoría…" (un `display: flex` pisaba el atributo `hidden`).
+
+---
+
 ## 2026-10-27 — Ronda 10: panel más simple, categorías sin "foco" y Proyectos
 
 ### Panel admin

@@ -1,7 +1,7 @@
 /* Poloniapp admin — panel simple, misma paleta y tipografía que el sitio (ver assets/css/site.css). */
 
 :root {
-  --color-primary: #99251F;   /* vino */
+  --color-primary: #E2241A;   /* rojo de interfaz (el #EB271C de la paleta, apenas más oscuro para el contraste) */
   --color-slate: #42576B;     /* pizarra */
   --color-ink: #2B3A48;
   --color-sky: #85BAEA;
@@ -14,6 +14,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -69,7 +70,7 @@ a { color: var(--color-primary); }
   padding: 8px 15px; border-radius: 999px; border: 1px solid var(--color-border);
   background: #fff; color: var(--color-slate); font-size: 0.85rem; font-weight: 500; cursor: pointer;
 }
-.admin-tabs button.active { background: var(--color-slate); border-color: var(--color-slate); color: #fff; }
+.admin-tabs button.active { background: var(--color-sky); border-color: var(--color-sky); color: var(--color-ink); font-weight: 700; }
 .admin-tabs button:disabled { opacity: 0.4; cursor: default; }
 
 .tab-note {
@@ -93,7 +94,7 @@ a { color: var(--color-primary); }
 }
 .field .save-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
 .field button.save {
-  padding: 6px 14px; border: none; border-radius: 8px; background: var(--color-slate);
+  padding: 6px 14px; border: none; border-radius: 8px; background: var(--color-primary);
   color: #fff; font-size: 0.8rem; cursor: pointer;
 }
 .field button.save:disabled { opacity: 0.4; cursor: default; }
@@ -125,7 +126,7 @@ a { color: var(--color-primary); }
 .crud-actions button {
   padding: 7px 14px; border: none; border-radius: 8px; font-size: 0.8rem; cursor: pointer;
 }
-.crud-actions .save { background: var(--color-slate); color: #fff; }
+.crud-actions .save { background: var(--color-primary); color: #fff; }
 .crud-actions .save:disabled { opacity: 0.4; cursor: default; }
 .crud-actions .delete { background: transparent; color: #b3392a; border: 1px solid #e3b6ac; }
 .crud-actions .status { font-size: 0.78rem; color: #2F6B3A; }
