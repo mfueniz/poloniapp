@@ -159,3 +159,55 @@ a { color: var(--color-primary); }
 .data-table th, .data-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--color-border); vertical-align: top; }
 .data-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--color-olive); }
 .data-table tr:last-child td { border-bottom: none; }
+
+/* --- Acordeones (actividades y proyectos) --- */
+.group-title { font-size: 0.95rem; color: var(--color-slate); margin: 22px 0 10px; }
+.group-title span, details.acc > summary span { color: var(--color-olive); font-weight: 400; }
+details.acc { border: 1px solid var(--color-border); border-radius: 14px; margin: 16px 0; background: #fff; }
+details.acc > summary {
+  cursor: pointer; list-style: none; padding: 14px 16px; font-weight: 700; color: var(--color-slate);
+  display: flex; align-items: center; gap: 8px;
+}
+details.acc > summary::-webkit-details-marker, details.item > summary::-webkit-details-marker { display: none; }
+details.acc > summary::before, details.item > summary::before {
+  content: '›'; display: inline-block; width: 14px; font-size: 1.2rem; line-height: 1; color: var(--color-olive);
+  transition: transform 0.15s;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+details.acc[open] { padding: 0 12px 12px; }
+details.acc[open] > summary { padding-left: 4px; padding-right: 4px; }
+details.acc-new { background: var(--color-sky-soft); border-color: #D5E6F8; }
+details.acc-new > summary { color: var(--color-primary); }
+
+details.item { background: var(--color-surface); border-radius: 12px; margin-bottom: 8px; }
+details.item > summary {
+  cursor: pointer; list-style: none; padding: 12px 14px;
+  display: grid; grid-template-columns: 14px 1fr; column-gap: 8px;
+}
+details.item > summary::before { grid-row: span 2; align-self: center; }
+details.item .item-title { font-weight: 600; font-size: 0.92rem; }
+details.item .item-meta { font-size: 0.8rem; color: var(--color-olive); }
+details.item[open] > summary { border-bottom: 1px solid var(--color-border); }
+details.item > .crud-card { margin: 0; background: transparent; }
+details.acc details.item { background: var(--color-surface); }
+
+/* --- Editor de secciones de proyecto --- */
+.sub-title { font-size: 0.85rem; color: var(--color-slate); margin: 16px 0 8px; }
+.section-editor { background: #fff; border: 1px solid var(--color-border); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+.sub-label { display: block; font-size: 0.74rem; color: var(--color-olive); margin: 10px 0 4px; }
+.sub-row { display: grid; gap: 6px; align-items: start; margin-bottom: 6px; }
+.card-row { grid-template-columns: 1fr 2fr 1.4fr 30px; }
+.button-row { grid-template-columns: 1fr 2fr 30px; }
+.sub-row input, .sub-row textarea {
+  width: 100%; padding: 7px 9px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 0.85rem; min-height: 36px;
+}
+.sub-row textarea { resize: vertical; }
+.sub-row .remove, .remove-section {
+  border: 1px solid #e3b6ac; background: #fff; color: #b3392a; border-radius: 8px; cursor: pointer;
+}
+.sub-row .remove { height: 36px; font-size: 1.1rem; }
+.remove-section { padding: 7px 12px; font-size: 0.8rem; }
+@media (max-width: 600px) {
+  .card-row, .button-row { grid-template-columns: 1fr 30px; }
+  .card-row .c-text, .card-row .c-meta, .button-row .b-url { grid-column: 1; }
+}

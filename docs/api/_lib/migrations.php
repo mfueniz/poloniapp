@@ -64,7 +64,109 @@ function migrations(): array
                 ['Viernes', '08:15', 'CLA', 'Humberto Crestuzzo'],
             ]),
         ],
+
+        // 2026-10-27: ubicación fija "Polonia" o texto libre; Proyectos (Puentes y Encuentros
+        // Matrimoniales) en Quiénes somos; categoría Encuentros Matrimoniales.
+        3 => [
+            "ALTER TABLE sessions ADD COLUMN location_text VARCHAR(255) NULL AFTER location_id",
+            // Todo lo que no es Polonia pasa a texto libre (el panel ya no administra ubicaciones).
+            "UPDATE sessions s JOIN locations l ON l.id = s.location_id
+             SET s.location_text = l.name, s.location_id = NULL
+             WHERE l.name <> 'Polonia'",
+
+            "CREATE TABLE IF NOT EXISTS projects (
+               id CHAR(36) NOT NULL PRIMARY KEY,
+               slug VARCHAR(191) NOT NULL UNIQUE,
+               title VARCHAR(255) NOT NULL,
+               tagline VARCHAR(255) NULL,               -- ej. 'Santiago Centro'
+               summary TEXT NULL,                       -- frase del inicio y bajada de la página
+               logo_url VARCHAR(1000) NULL,
+               sections MEDIUMTEXT NULL,                -- JSON: [{title, text, cards:[{title,text,meta}], buttons:[{label,url}]}]
+               category_id CHAR(36) NULL,               -- actividades del proyecto (próximas / anteriores)
+               upcoming_label VARCHAR(255) NULL,
+               past_label VARCHAR(255) NULL,
+               show_on_home TINYINT(1) NOT NULL DEFAULT 0,
+               visible TINYINT(1) NOT NULL DEFAULT 1,
+               sort_order INT NOT NULL DEFAULT 0,
+               created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+               CONSTRAINT projects_category FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE SET NULL
+             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+            "INSERT INTO categories (id, slug, name, description, sort_order, visible, bucket)
+             SELECT UUID(), 'encuentros-matrimoniales', 'Encuentros Matrimoniales', NULL, 7, 1, NULL FROM DUAL
+             WHERE NOT EXISTS (SELECT 1 FROM categories WHERE slug = 'encuentros-matrimoniales')",
+            "UPDATE activities SET category_id = (SELECT id FROM categories WHERE slug = 'encuentros-matrimoniales')
+             WHERE title = 'Encuentro de Matrimonios'",
+
+            'seed_projects',
+        ],
     ];
+}
+
+/** Contenido inicial de Proyectos (después se edita en el panel, pestaña Proyectos). */
+function seed_projects(): void
+{
+    $categoryId = db()->query("SELECT id FROM categories WHERE slug = 'encuentros-matrimoniales'")->fetchColumn() ?: null;
+    $projects = [
+        [
+            'slug' => 'puentes',
+            'title' => 'Puentes',
+            'tagline' => 'Santiago Centro',
+            'summary' => 'Somos un proyecto que trabaja en torno a **3 pilares fundamentales** para fortalecer a las familias de Santiago Centro y juntos acercarnos más a Cristo.',
+            'logo_url' => 'assets/img/proyectos/puentes-logo.png',
+            'sections' => [
+                [
+                    'title' => 'Nuestros pilares',
+                    'text' => '',
+                    'cards' => [
+                        ['title' => 'Familia', 'text' => 'Fortalecer el proyecto de familia para matrimonios jóvenes.', 'meta' => '1 vez al mes en Parroquia San Andrés'],
+                        ['title' => 'Trabajo', 'text' => 'Acompañamiento a emprendedores y apoyo en reinserción laboral con talleres y mentoría.', 'meta' => 'Mensual + sesiones online'],
+                        ['title' => 'Vivienda', 'text' => 'Reparación de casas para asegurar condiciones dignas de vida.', 'meta' => 'Sábados por la mañana'],
+                    ],
+                    'buttons' => [],
+                ],
+                [
+                    'title' => '¿Cómo puedes ayudar?',
+                    'text' => '',
+                    'cards' => [],
+                    'buttons' => [['label' => 'Voluntario', 'url' => ''], ['label' => 'Difusión', 'url' => ''], ['label' => 'Donación', 'url' => '']],
+                ],
+                [
+                    'title' => '¡Súmate al proyecto!',
+                    'text' => "**Familia:** Ignacio +569 5371 9944 · Joaquín +569 9962 6217
+**Trabajo:** Martín +569 7373 4206 · José Ignacio +569 7708 9186
+**Vivienda:** Tomás +569 9175 0169 · Francisco +569 9140 1610",
+                    'cards' => [],
+                    'buttons' => [],
+                ],
+            ],
+            'category_id' => null,
+            'show_on_home' => 1,
+            'sort_order' => 1,
+        ],
+        [
+            'slug' => 'encuentros-matrimoniales',
+            'title' => 'Encuentros Matrimoniales',
+            'tagline' => 'Matrimonios jóvenes',
+            'summary' => 'Encuentros semanales para matrimonios jóvenes. Cada encuentro comienza con una charla de ayuda para formar una familia cristiana, acompañado siempre de una comida donde los participantes comparten sus experiencias.',
+            'logo_url' => null,
+            'sections' => [],
+            'category_id' => $categoryId,
+            'show_on_home' => 0,
+            'sort_order' => 2,
+        ],
+    ];
+    $st = db()->prepare(
+        'INSERT IGNORE INTO projects (id, slug, title, tagline, summary, logo_url, sections, category_id, upcoming_label, past_label, show_on_home, visible, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)'
+    );
+    foreach ($projects as $p) {
+        $st->execute([
+            uuid(), $p['slug'], $p['title'], $p['tagline'], $p['summary'], $p['logo_url'],
+            json_encode($p['sections'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            $p['category_id'], 'Próximos encuentros', 'Encuentros anteriores', $p['show_on_home'], $p['sort_order'],
+        ]);
+    }
 }
 
 /** Cada círculo = 1 actividad + 1 sesión recurrente (el responsable va como "speaker"). */
@@ -123,8 +225,13 @@ function migrate(): void
             if ($target <= $version) {
                 continue;
             }
-            foreach ($statements as $sql) {
-                $pdo->exec($sql);
+            foreach ($statements as $step) {
+                // Un paso es SQL, o el nombre de una función PHP (para datos con comillas, JSON, etc.).
+                if (preg_match('/^[a-z_]+$/', $step) && function_exists($step)) {
+                    $step();
+                } else {
+                    $pdo->exec($step);
+                }
             }
             set_setting('schema_version', (string) $target);
         }

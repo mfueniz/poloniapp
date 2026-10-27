@@ -4,6 +4,22 @@ Log vivo de decisiones de diseño, UX/UI y estructura de contenido tomadas en se
 
 ---
 
+## 2026-10-27 — Ronda 10: panel más simple, categorías sin "foco" y Proyectos
+
+### Panel admin
+- Se quitan las pestañas Categorías y Ubicaciones. La categoría se elige en el selector de cada actividad, o se crea ahí mismo ("+ Nueva categoría…"; si había una oculta con ese nombre, se reactiva).
+- Lugar de cada sesión: "Polonia" (fijo, con su dirección privada) u "Otro lugar…" escrito a mano (`sessions.location_text`). Las ubicaciones que no eran Polonia pasaron a texto.
+- Actividades: primero las próximas (y las que aún no tienen sesiones); debajo, acordeones cerrados "Actividades pasadas" y "Círculos". Cada actividad se abre para editarla; el panel recuerda qué estaba abierto al guardar.
+- Se quitan los campos de contacto de la actividad (la inscripción por WhatsApp/link ya cubre eso); el botón flotante de WhatsApp usa siempre el número general.
+
+### Sitio
+- Sin categorías "padre" (espiritual/trabajo/familia): en el inicio los filtros son las categorías mismas, y solo las que tienen actividades próximas o semanales. Con una categoría elegida se ven todas sus próximas (también los círculos de otros días).
+- Proyectos: sección nueva en Quiénes somos, cada proyecto con página propia (`#/quienes-somos/proyectos/<slug>`), editable en la pestaña Proyectos (frase principal, logo, secciones con texto, tarjetas y botones; `**negrita**` y números de WhatsApp como links). Un proyecto puede mostrarse en el inicio (frase + "Ver más") y puede tener una categoría asociada para listar "Próximos encuentros" / "Encuentros anteriores".
+- Puentes: contenido tomado de su one-pager (la presentación de Google no se pudo abrir desde el entorno de desarrollo); logo recortado de esa imagen, reemplazable desde el panel. Se muestra en el inicio.
+- Encuentros Matrimoniales: categoría nueva; la actividad "Encuentro de Matrimonios" pasó a esa categoría.
+
+---
+
 ## 2026-10-26 — Ronda 9: hosting propio, nueva identidad, app instalable y "Para rezar hoy"
 
 ### Infraestructura

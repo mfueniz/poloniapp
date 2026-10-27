@@ -11,6 +11,7 @@
 //            POST ?action=save&table=X   con id = update, sin id = insert
 //            POST ?action=delete&table=X
 //            POST ?action=upload         imagen (multipart, campo "file") -> uploads/
+//            POST ?action=category_create   categoría nueva desde el selector de actividades
 //            POST ?action=admin_add|admin_delete|password   gestión de administradores
 //            GET  ?action=prayer_admin|stats   POST ?action=prayer_refresh|prayer_override
 //
@@ -34,8 +35,9 @@ const TABLES = [
     'site_content' => ['pk' => 'key', 'cols' => ['value'], 'order' => 'section, `key`'],
     'categories' => ['pk' => 'id', 'cols' => ['slug', 'name', 'description', 'sort_order', 'bucket', 'visible'], 'order' => 'sort_order'],
     'locations' => ['pk' => 'id', 'cols' => ['name', 'address'], 'order' => 'name'],
-    'activities' => ['pk' => 'id', 'cols' => ['category_id', 'title', 'description', 'format', 'photo_url', 'visible', 'contact_name', 'contact_phone', 'registration_whatsapp', 'registration_url'], 'order' => 'title'],
-    'sessions' => ['pk' => 'id', 'cols' => ['activity_id', 'date', 'weekday', 'time_start', 'time_end', 'topic', 'speaker', 'location_id', 'price'], 'order' => 'date, time_start'],
+    'activities' => ['pk' => 'id', 'cols' => ['category_id', 'title', 'description', 'format', 'photo_url', 'visible', 'registration_whatsapp', 'registration_url'], 'order' => 'title'],
+    'sessions' => ['pk' => 'id', 'cols' => ['activity_id', 'date', 'weekday', 'time_start', 'time_end', 'topic', 'speaker', 'location_id', 'location_text', 'price'], 'order' => 'date, time_start'],
+    'projects' => ['pk' => 'id', 'cols' => ['slug', 'title', 'tagline', 'summary', 'logo_url', 'sections', 'category_id', 'upcoming_label', 'past_label', 'show_on_home', 'visible', 'sort_order'], 'order' => 'sort_order, title'],
 ];
 
 const UPLOAD_TYPES = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
@@ -216,6 +218,7 @@ function public_payload(): array
         'activities' => attach_sessions($pdo->query('SELECT * FROM activities WHERE visible = 1')->fetchAll()),
         // Solo el nombre: la dirección real nunca sale por la API pública.
         'locations' => $pdo->query('SELECT id, name FROM locations')->fetchAll(),
+        'projects' => decode_sections($pdo->query('SELECT * FROM projects WHERE visible = 1 ORDER BY sort_order, title')->fetchAll()),
     ];
 }
 
@@ -237,7 +240,51 @@ function list_table(string $table): array
     }
     $cfg = table_config($table);
     $rows = db()->query('SELECT * FROM ' . q($table) . ' ORDER BY ' . $cfg['order'])->fetchAll();
-    return $table === 'activities' ? attach_sessions($rows) : $rows;
+    if ($table === 'activities') {
+        return attach_sessions($rows);
+    }
+    return $table === 'projects' ? decode_sections($rows) : $rows;
+}
+
+function decode_sections(array $projects): array
+{
+    foreach ($projects as &$p) {
+        $p['sections'] = json_decode((string) $p['sections'], true) ?: [];
+    }
+    return $projects;
+}
+
+/** "Encuentros Matrimoniales" -> "encuentros-matrimoniales" */
+function slugify(string $text): string
+{
+    $text = strtr(mb_lower($text), ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n']);
+    return trim(preg_replace('/[^a-z0-9]+/', '-', $text), '-');
+}
+
+function mb_lower(string $s): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($s, 'UTF-8') : strtr(strtolower($s), ['Á' => 'á', 'É' => 'é', 'Í' => 'í', 'Ó' => 'ó', 'Ú' => 'ú', 'Ü' => 'ü', 'Ñ' => 'ñ']);
+}
+
+/** Crea una categoría (o reactiva una oculta con el mismo nombre) y devuelve su id. */
+function create_category(array $input): array
+{
+    $name = trim((string) ($input['name'] ?? ''));
+    $slug = slugify($name);
+    if ($name === '' || $slug === '') {
+        throw new ApiError('Escribe el nombre de la categoría.', 400);
+    }
+    $st = db()->prepare('SELECT id FROM categories WHERE slug = ?');
+    $st->execute([$slug]);
+    if ($id = $st->fetchColumn()) {
+        db()->prepare('UPDATE categories SET visible = 1 WHERE id = ?')->execute([$id]);
+        return ['id' => $id, 'name' => $name];
+    }
+    $id = uuid();
+    db()->prepare(
+        'INSERT INTO categories (id, slug, name, sort_order, visible) SELECT ?, ?, ?, COALESCE(MAX(sort_order), 0) + 1, 1 FROM categories'
+    )->execute([$id, $slug, $name]);
+    return ['id' => $id, 'name' => $name];
 }
 
 // ---------------------------------------------------------------------------
@@ -258,7 +305,13 @@ function save_row(string $table, array $input, array $admin): array
     foreach ($cfg['cols'] as $col) {
         if (array_key_exists($col, $input)) {
             $v = $input[$col];
-            $values[$col] = is_bool($v) ? (int) $v : $v;
+            $values[$col] = is_bool($v) ? (int) $v : (is_array($v) ? json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : $v);
+        }
+    }
+    if ($table === 'projects' && array_key_exists('slug', $values)) {
+        $values['slug'] = slugify((string) ($values['slug'] ?: ($values['title'] ?? '')));
+        if ($values['slug'] === '') {
+            throw new ApiError('El proyecto necesita un nombre.', 400);
         }
     }
     if ($table === 'site_content') {
@@ -460,6 +513,10 @@ try {
             prayer_override(body());
             respond(prayer_items());
 
+        case 'POST category_create':
+            require_admin();
+            respond(create_category(body()));
+
         case 'POST admin_add':
             require_admin();
             add_admin(body());
@@ -499,7 +556,7 @@ try {
     if ($info === 1451) {
         respond(['error' => 'No se puede borrar: hay otros datos que dependen de esto (ej. actividades de esta categoría).'], 409);
     } elseif ($info === 1062) {
-        respond(['error' => 'Ya existe otro registro con ese mismo valor (ej. la misma URL o fecha).'], 409);
+        respond(['error' => 'Ya existe otro registro con ese mismo valor (ej. el mismo nombre o la misma fecha).'], 409);
     } elseif (in_array($info, [3819, 4025], true)) {
         respond(['error' => 'Datos inválidos: revisa los campos obligatorios (ej. una sesión necesita fecha o día recurrente).'], 400);
     }

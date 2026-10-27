@@ -581,3 +581,78 @@ button { font-family: var(--font); }
   font-size: 0.88rem; box-shadow: var(--shadow);
   animation: fade-in 0.2s ease-out;
 }
+
+/* --- Proyectos (Quiénes somos → Proyectos, y teaser en el inicio) --- */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.projects-list { padding: 12px 20px 0; display: flex; flex-direction: column; gap: 12px; }
+.project-teaser {
+  display: block;
+  padding: 20px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--slate-deep);
+  text-decoration: none;
+  text-align: center;
+  transition: box-shadow 0.15s;
+}
+.project-teaser:hover { box-shadow: var(--shadow); }
+.project-teaser .pt-logo { height: 70px; width: auto; max-width: 70%; object-fit: contain; display: block; margin: 0 auto 8px; }
+.project-teaser .pt-title { margin: 0 0 4px; font-size: 1.2rem; font-weight: 700; color: var(--slate); }
+.project-teaser .pt-tag { margin: 0 0 10px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--olive); }
+.project-teaser .pt-summary { margin: 0 0 12px; font-size: 0.95rem; line-height: 1.5; }
+.project-teaser strong, .project-summary strong { color: var(--wine); }
+.project-teaser .pt-more { color: var(--wine); font-weight: 700; font-size: 0.9rem; }
+
+.project-hero { padding: 8px 20px 4px; text-align: center; }
+.project-hero h1 { margin: 6px 0 8px; font-size: 1.6rem; color: var(--slate); }
+.project-logo { height: 110px; width: auto; max-width: 80%; object-fit: contain; display: block; margin: 0 auto 6px; }
+.project-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 4px 0 14px;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--slate-deep);
+  color: #fff;
+  font-size: 0.85rem; font-weight: 700;
+}
+.project-tag svg { width: 15px; height: 15px; color: var(--red); }
+.project-summary { font-size: 1.05rem; line-height: 1.55; color: var(--slate-deep); }
+.project-summary p, .project-text p { margin: 0 0 10px; }
+.project-section { padding: 22px 20px 4px; }
+.project-section h2 { margin: 0 0 12px; font-size: 1.2rem; color: var(--slate); }
+.project-text { font-size: 0.95rem; line-height: 1.6; }
+.project-text a { color: var(--wine); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.project-cards { display: grid; gap: 12px; }
+.project-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  padding: 18px 18px 16px;
+  color: #fff;
+}
+.project-card::after {
+  content: ''; position: absolute; right: -30px; top: -30px;
+  width: 110px; height: 110px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+}
+.project-card h3 { margin: 0 0 6px; font-size: 1.05rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.project-card p { margin: 0; font-size: 0.92rem; line-height: 1.45; }
+.project-card .meta { margin-top: 12px; font-weight: 700; font-size: 0.82rem; opacity: 0.95; }
+.tone-0 { background: #8F6A0A; }   /* dorado (Puentes · familia) */
+.tone-1 { background: var(--slate-deep); }
+.tone-2 { background: var(--wine); }
+.project-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+.pill {
+  display: inline-block;
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  color: #fff;
+  font-size: 0.9rem; font-weight: 700;
+  text-decoration: none;
+}
+.sessions-list.flush, .empty-note.flush { padding-left: 0; padding-right: 0; margin-left: 0; margin-right: 0; }
+.sessions-list.flush { padding-top: 0; }
+.session-row.link { display: block; text-decoration: none; color: inherit; }
+.session-row.link:hover { background: var(--sky-soft); }
+.sessions-list.past .session-row { border-left-color: var(--line); }

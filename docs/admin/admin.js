@@ -91,9 +91,8 @@ document.querySelectorAll('.admin-tabs button').forEach((btn) => {
 
 function loadTab(tab) {
   if (tab === 'contenido') return loadContenido();
-  if (tab === 'categorias') return loadCategorias();
-  if (tab === 'ubicaciones') return loadUbicaciones();
   if (tab === 'actividades') return loadActividades();
+  if (tab === 'proyectos') return loadProyectos();
   if (tab === 'rezar') return loadRezar();
   if (tab === 'admins') return loadAdmins();
   document.getElementById('tab-content').innerHTML = `<p class="coming-soon">Próximamente.</p>`;
@@ -101,7 +100,7 @@ function loadTab(tab) {
 
 // ---------------------------------------------------------------------------
 // Upload de imágenes a docs/uploads/ en el mismo hosting (solo admins).
-// Reutilizable desde cualquier tab (contenido fijo, actividades, publicaciones).
+// Reutilizable desde cualquier tab (contenido fijo, actividades, proyectos).
 // Devuelve una ruta relativa a la raíz del sitio (ej. "uploads/abc.jpg"), igual que assets/.
 // ---------------------------------------------------------------------------
 async function uploadImage(file) {
@@ -216,156 +215,81 @@ async function loadContenido() {
 }
 
 // ---------------------------------------------------------------------------
-// Tab: Categorías (editar las 9 existentes — crear una nueva no es prioritario, ver DECISIONS.md)
+// Tab: Actividades — arriba las próximas (y las que aún no tienen sesiones); abajo dos
+// acordeones cerrados: actividades pasadas y círculos (semanales). Cada actividad se abre
+// para editarla. La categoría se elige en el selector o se crea ahí mismo.
 // ---------------------------------------------------------------------------
-async function loadCategorias() {
-  const container = document.getElementById('tab-content');
-  container.innerHTML = `<p class="loading-note">Cargando…</p>`;
+const WEEKDAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const NEW_CATEGORY = '__new';
+let poloniaId = null;
+let openAfterReload = null;
 
-  const { data, error } = await db.list('categories');
-  if (error) {
-    container.innerHTML = `<p class="loading-note">Error: ${esc(error.message)}</p>`;
-    return;
-  }
-
-  container.innerHTML = data
-    .map(
-      (c) => `
-    <div class="crud-card" data-id="${c.id}">
-      <div class="crud-row">
-        <div><label>Nombre</label><input type="text" class="f-name" value="${esc(c.name)}"></div>
-        <div style="flex:0 0 90px;"><label>Orden</label><input type="number" class="f-sort" value="${c.sort_order}"></div>
-        <div style="flex:0 0 130px;"><label>Bucket</label>
-          <select class="f-bucket">
-            <option value="" ${!c.bucket ? 'selected' : ''}>(ninguno)</option>
-            <option value="formacion" ${c.bucket === 'formacion' ? 'selected' : ''}>formación</option>
-            <option value="laboral" ${c.bucket === 'laboral' ? 'selected' : ''}>laboral</option>
-            <option value="familia" ${c.bucket === 'familia' ? 'selected' : ''}>familia</option>
-          </select>
-        </div>
-        <div class="crud-check"><label><input type="checkbox" class="f-visible" ${c.visible ? 'checked' : ''}> visible</label></div>
-      </div>
-      <div class="crud-row">
-        <div><label>Descripción</label><textarea class="f-desc" placeholder="(sin descripción propia todavía)">${esc(c.description)}</textarea></div>
-      </div>
-      <div class="crud-actions">
-        <button class="save">Guardar</button>
-        <span class="status"></span>
-      </div>
-    </div>`
-    )
-    .join('');
-
-  container.querySelectorAll('.crud-card').forEach((card) => {
-    const id = card.dataset.id;
-    const saveBtn = card.querySelector('.save');
-    const status = card.querySelector('.status');
-    saveBtn.addEventListener('click', async () => {
-      saveBtn.disabled = true;
-      status.textContent = 'Guardando…';
-      const { error } = await db.save('categories', {
-          id,
-          name: card.querySelector('.f-name').value,
-          description: card.querySelector('.f-desc').value || null,
-          sort_order: Number(card.querySelector('.f-sort').value) || 0,
-          bucket: card.querySelector('.f-bucket').value || null,
-          visible: card.querySelector('.f-visible').checked,
-        });
-      saveBtn.disabled = false;
-      status.textContent = error ? 'Error: ' + error.message : 'Guardado ✓';
-    });
-  });
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// ---------------------------------------------------------------------------
-// Tab: Ubicaciones (CRUD simple)
-// ---------------------------------------------------------------------------
-function locationCardHtml(l) {
+function fmtDate(iso) {
+  const label = new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  return label.replace(/\./g, '');
+}
+
+/** 'circles' | 'upcoming' | 'past' */
+function activityGroup(a, circlesId) {
+  if (a.category_id === circlesId) return 'circles';
+  const sessions = a.sessions || [];
+  if (!sessions.length) return 'upcoming';
+  const today = todayIso();
+  return sessions.some((s) => !s.date || s.date >= today) ? 'upcoming' : 'past';
+}
+
+function activityWhen(a) {
+  const sessions = a.sessions || [];
+  if (!sessions.length) return 'Sin sesiones todavía';
+  const today = todayIso();
+  const recurring = sessions.find((s) => !s.date);
+  if (recurring) return `Todos los ${recurring.weekday.toLowerCase()}${recurring.time_start ? ' · ' + recurring.time_start.slice(0, 5) : ''}`;
+  const dates = sessions.map((s) => s.date).sort();
+  const next = dates.find((d) => d >= today);
+  return next ? `Próxima: ${fmtDate(next)}` : `Última: ${fmtDate(dates[dates.length - 1])}`;
+}
+
+function sessionPlaceHtml(s) {
+  const place = !s ? 'polonia' : s.location_id ? 'polonia' : s.location_text ? 'other' : 'none';
   return `
-    <div class="crud-card" data-id="${l?.id || ''}">
-      <div class="crud-row">
-        <div><label>Nombre público</label><input type="text" class="f-name" value="${esc(l?.name)}" placeholder="ej. Las Condes"></div>
-        <div><label>Dirección real (nunca pública)</label><input type="text" class="f-address" value="${esc(l?.address)}" placeholder="ej. Polonia 306, Las Condes"></div>
-      </div>
-      <div class="crud-actions">
-        <button class="save">${l ? 'Guardar' : 'Crear'}</button>
-        ${l ? `<button class="delete">Borrar</button>` : ''}
-        <span class="status"></span>
-      </div>
+    <div style="flex:0 0 170px;"><label>Lugar</label>
+      <select class="s-place">
+        <option value="polonia" ${place === 'polonia' ? 'selected' : ''}>Polonia</option>
+        <option value="other" ${place === 'other' ? 'selected' : ''}>Otro lugar…</option>
+        <option value="none" ${place === 'none' ? 'selected' : ''}>Sin lugar</option>
+      </select>
+    </div>
+    <div class="s-place-other" ${place === 'other' ? '' : 'hidden'}><label>¿Dónde?</label>
+      <input type="text" class="s-location-text" value="${esc(s?.location_text)}" placeholder="ej. Parroquia San Andrés">
     </div>`;
 }
 
-async function loadUbicaciones() {
-  const container = document.getElementById('tab-content');
-  container.innerHTML = `<p class="loading-note">Cargando…</p>`;
-
-  const { data, error } = await db.list('locations');
-  if (error) {
-    container.innerHTML = `<p class="loading-note">Error: ${esc(error.message)}</p>`;
-    return;
-  }
-
-  container.innerHTML = data.map(locationCardHtml).join('') + `<h3 style="font-size:0.9rem;margin:24px 0 10px;">Nueva ubicación</h3>` + locationCardHtml(null);
-
-  wireLocationCards(container);
-}
-
-function wireLocationCards(container) {
-  container.querySelectorAll('.crud-card').forEach((card) => {
-    const id = card.dataset.id;
-    const saveBtn = card.querySelector('.save');
-    const deleteBtn = card.querySelector('.delete');
-    const status = card.querySelector('.status');
-
-    saveBtn.addEventListener('click', async () => {
-      const name = card.querySelector('.f-name').value.trim();
-      const address = card.querySelector('.f-address').value.trim();
-      if (!name || !address) {
-        status.textContent = 'Nombre y dirección son obligatorios.';
-        return;
-      }
-      saveBtn.disabled = true;
-      status.textContent = 'Guardando…';
-      const { error } = await db.save('locations', { id, name, address });
-      saveBtn.disabled = false;
-      if (error) {
-        status.textContent = 'Error: ' + error.message;
-      } else {
-        status.textContent = 'Guardado ✓';
-        if (!id) loadUbicaciones(); // recarga para que la nueva pase a la lista y limpie el form
-      }
-    });
-
-    deleteBtn?.addEventListener('click', async () => {
-      if (!confirm('¿Borrar esta ubicación? Las sesiones que la usan quedan sin ubicación.')) return;
-      const { error } = await db.remove('locations', id);
-      if (error) {
-        status.textContent = 'Error: ' + error.message;
-      } else {
-        loadUbicaciones();
-      }
-    });
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Tab: Actividades (CRUD + sesiones anidadas)
-// ---------------------------------------------------------------------------
-function sessionRowHtml(s, activityId, locOptions) {
+function sessionRowHtml(s, activityId) {
+  const weekday = s?.weekday || '';
   return `
     <div class="session-crud-row" data-id="${s?.id || ''}" data-activity="${activityId}">
       <div class="crud-row">
-        <div><label>Fecha (o vacío si es recurrente)</label><input type="date" class="s-date" value="${s?.date || ''}"></div>
-        <div><label>Día recurrente (ej. Lunes)</label><input type="text" class="s-weekday" value="${esc(s?.weekday)}"></div>
-        <div style="flex:0 0 100px;"><label>Hora inicio</label><input type="time" class="s-start" value="${s?.time_start?.slice(0, 5) || ''}"></div>
-        <div style="flex:0 0 100px;"><label>Hora fin</label><input type="time" class="s-end" value="${s?.time_end?.slice(0, 5) || ''}"></div>
+        <div><label>Fecha (vacía si se repite cada semana)</label><input type="date" class="s-date" value="${s?.date || ''}"></div>
+        <div><label>Se repite cada…</label>
+          <select class="s-weekday">
+            <option value="">(no se repite)</option>
+            ${WEEKDAYS.map((d) => `<option value="${d}" ${d.toLowerCase() === weekday.toLowerCase() ? 'selected' : ''}>${d}</option>`).join('')}
+          </select>
+        </div>
+        <div style="flex:0 0 110px;"><label>Hora inicio</label><input type="time" class="s-start" value="${s?.time_start?.slice(0, 5) || ''}"></div>
+        <div style="flex:0 0 110px;"><label>Hora fin</label><input type="time" class="s-end" value="${s?.time_end?.slice(0, 5) || ''}"></div>
       </div>
       <div class="crud-row">
         <div><label>Tema</label><input type="text" class="s-topic" value="${esc(s?.topic)}"></div>
         <div><label>Expositor / responsable</label><input type="text" class="s-speaker" value="${esc(s?.speaker)}"></div>
         <div style="flex:0 0 140px;"><label>Precio</label><input type="text" class="s-price" value="${esc(s?.price)}" placeholder="ej. $10.000"></div>
-        <div style="flex:0 0 160px;"><label>Ubicación</label><select class="s-location">${locOptions(s)}</select></div>
       </div>
+      <div class="crud-row">${sessionPlaceHtml(s)}</div>
       <div class="crud-actions">
         <button class="save">${s ? 'Guardar sesión' : 'Agregar sesión'}</button>
         ${s ? `<button class="delete">Borrar</button>` : ''}
@@ -376,32 +300,41 @@ function sessionRowHtml(s, activityId, locOptions) {
 
 async function loadActividades() {
   const container = document.getElementById('tab-content');
-  container.innerHTML = `<p class="loading-note">Cargando…</p>`;
+  // Mantener abiertos los acordeones y actividades que estaban abiertos antes de recargar.
+  const wasOpen = new Set([...container.querySelectorAll('details[open][data-key]')].map((d) => d.dataset.key));
+  if (openAfterReload) wasOpen.add(openAfterReload);
+  openAfterReload = null;
+  if (!container.querySelector('.acc')) container.innerHTML = `<p class="loading-note">Cargando…</p>`;
 
-  const [{ data: activities, error: e1 }, { data: categories, error: e2 }, { data: locations, error: e3 }] = await Promise.all([
+  const [{ data: activities, error: e1 }, { data: categories, error: e2 }, { data: locations, error: e3 }, { data: stats }] = await Promise.all([
     db.list('activities'),
     db.list('categories'),
     db.list('locations'),
+    attempt(api('stats')),
   ]);
   const err = e1 || e2 || e3;
   if (err) {
     container.innerHTML = `<p class="loading-note">Error: ${esc(err.message)}</p>`;
     return;
   }
+  poloniaId = locations.find((l) => l.name === 'Polonia')?.id || null;
+  const circlesId = categories.find((c) => c.slug === 'circulos')?.id;
+  const selectable = categories.filter((c) => c.slug !== 'publicaciones');
 
   const catOptions = (selectedId) =>
-    categories.map((c) => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
-  const locOptions = (s) =>
-    `<option value="">(sin ubicación)</option>` +
-    locations.map((l) => `<option value="${l.id}" ${l.id === s?.location_id ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
+    selectable
+      .filter((c) => c.visible || c.id === selectedId)
+      .map((c) => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${esc(c.name)}</option>`)
+      .join('') + `<option value="${NEW_CATEGORY}">+ Nueva categoría…</option>`;
+  const catName = (id) => categories.find((c) => c.id === id)?.name || '';
 
-  function activityCardHtml(a) {
+  function activityFormHtml(a) {
     const sessions = a ? a.sessions || [] : [];
     return `
       <div class="crud-card" data-id="${a?.id || ''}">
         <div class="crud-row">
           <div><label>Título</label><input type="text" class="f-title" value="${esc(a?.title)}"></div>
-          <div style="flex:0 0 160px;"><label>Categoría</label><select class="f-category">${catOptions(a?.category_id)}</select></div>
+          <div style="flex:0 0 190px;"><label>Categoría</label><select class="f-category">${catOptions(a?.category_id)}</select></div>
           <div style="flex:0 0 110px;"><label>Formato</label>
             <select class="f-format">
               <option value="single" ${!a || a.format === 'single' ? 'selected' : ''}>única</option>
@@ -409,6 +342,9 @@ async function loadActividades() {
             </select>
           </div>
           <div class="crud-check"><label><input type="checkbox" class="f-visible" ${!a || a.visible ? 'checked' : ''}> visible</label></div>
+        </div>
+        <div class="crud-row new-category" hidden>
+          <div><label>Nombre de la categoría nueva</label><input type="text" class="f-new-category" placeholder="ej. Encuentros Matrimoniales"></div>
         </div>
         <div class="crud-row">
           <div><label>Descripción</label><textarea class="f-desc">${esc(a?.description)}</textarea></div>
@@ -424,10 +360,6 @@ async function loadActividades() {
             <input type="text" class="f-photo" value="${esc(a?.photo_url)}" placeholder="o pega una ruta/URL (ej. assets/activities/foto.jpg)">
           </div>
         </div>
-        <div class="crud-row">
-          <div><label>Contacto para el botón de WhatsApp — nombre (opcional; si no, se usa el número general)</label><input type="text" class="f-contact-name" value="${esc(a?.contact_name)}"></div>
-          <div><label>Contacto — teléfono</label><input type="text" class="f-contact-phone" value="${esc(a?.contact_phone)}" placeholder="+569..."></div>
-        </div>
         ${registrationBlockHtml(a)}
         <div class="crud-actions">
           <button class="save">${a ? 'Guardar' : 'Crear actividad'}</button>
@@ -438,7 +370,7 @@ async function loadActividades() {
           a
             ? `<div class="sessions-block">
                  <h4>Sesiones (${sessions.length})</h4>
-                 <div class="sessions-list">${sessions.map((s) => sessionRowHtml(s, a.id, locOptions)).join('')}</div>
+                 <div class="sessions-list">${sessions.map((s) => sessionRowHtml(s, a.id)).join('')}</div>
                  <button class="add-btn add-session">+ agregar sesión</button>
                </div>`
             : ''
@@ -446,154 +378,425 @@ async function loadActividades() {
       </div>`;
   }
 
-  const { data: stats } = await attempt(api('stats'));
-  container.innerHTML =
-    (flashMessage ? `<p class="flash">${esc(flashMessage)}</p>` : '') +
-    `<p class="tab-note">Al crear una actividad visible se envía una notificación a ${
+  function activityItemHtml(a) {
+    return `
+      <details class="item" data-key="a-${a.id}">
+        <summary>
+          <span class="item-title">${esc(a.title)}${a.visible ? '' : ' <span class="badge warn">oculta</span>'}</span>
+          <span class="item-meta">${esc(catName(a.category_id))} · ${esc(activityWhen(a))}</span>
+        </summary>
+        ${activityFormHtml(a)}
+      </details>`;
+  }
+
+  const groups = { upcoming: [], past: [], circles: [] };
+  for (const a of activities) groups[activityGroup(a, circlesId)].push(a);
+  const firstDate = (a, pick) => {
+    const today = todayIso();
+    const dates = (a.sessions || []).map((s) => s.date).filter(Boolean).sort();
+    if (pick === 'next') return dates.find((d) => d >= today) || (a.sessions?.length ? '0000' : '9999');
+    return dates[dates.length - 1] || '';
+  };
+  groups.upcoming.sort((x, y) => firstDate(x, 'next').localeCompare(firstDate(y, 'next')));
+  groups.past.sort((x, y) => firstDate(y, 'last').localeCompare(firstDate(x, 'last')));
+  groups.circles.sort((x, y) => {
+    const ix = WEEKDAYS.indexOf(x.sessions?.[0]?.weekday) * 10000 + Number((x.sessions?.[0]?.time_start || '99:99').replace(':', '').slice(0, 4));
+    const iy = WEEKDAYS.indexOf(y.sessions?.[0]?.weekday) * 10000 + Number((y.sessions?.[0]?.time_start || '99:99').replace(':', '').slice(0, 4));
+    return ix - iy;
+  });
+
+  container.innerHTML = `
+    ${flashMessage ? `<p class="flash">${esc(flashMessage)}</p>` : ''}
+    <p class="tab-note">Al crear una actividad visible se envía una notificación a ${
       stats ? `los <strong>${stats.subscribers}</strong> dispositivos` : 'los dispositivos'
-    } que activaron las notificaciones de Poloniapp.</p>` +
-    activities.map(activityCardHtml).join('') +
-    `<h3 style="font-size:0.9rem;margin:24px 0 10px;">Nueva actividad</h3>` +
-    activityCardHtml(null);
+    } que activaron las notificaciones de Poloniapp.</p>
+    <details class="acc acc-new" data-key="new">
+      <summary>+ Nueva actividad</summary>
+      ${activityFormHtml(null)}
+    </details>
+    <h2 class="group-title">Próximas actividades <span>(${groups.upcoming.length})</span></h2>
+    ${groups.upcoming.length ? groups.upcoming.map(activityItemHtml).join('') : '<p class="loading-note">No hay actividades próximas.</p>'}
+    <details class="acc" data-key="past">
+      <summary>Actividades pasadas <span>(${groups.past.length})</span></summary>
+      ${groups.past.map(activityItemHtml).join('') || '<p class="loading-note">No hay actividades pasadas.</p>'}
+    </details>
+    <details class="acc" data-key="circles">
+      <summary>Círculos <span>(${groups.circles.length})</span></summary>
+      ${groups.circles.map(activityItemHtml).join('') || '<p class="loading-note">No hay círculos.</p>'}
+    </details>`;
   flashMessage = '';
 
-  wireActivityCards(container, { locOptions });
+  container.querySelectorAll('details[data-key]').forEach((d) => {
+    if (wasOpen.has(d.dataset.key)) d.open = true;
+  });
+  container.querySelectorAll('.crud-card').forEach(wireActivityCard);
 }
 
-function wireSessionRow(row, locOptions) {
+function wireSessionRow(row) {
   const id = row.dataset.id;
   const activityId = row.dataset.activity;
   const saveBtn = row.querySelector('.save');
   const deleteBtn = row.querySelector('.delete');
-  const status = row.querySelector('.status');
+  const status = row.querySelector('.crud-actions .status');
+  const placeSelect = row.querySelector('.s-place');
+  placeSelect.addEventListener('change', () => {
+    row.querySelector('.s-place-other').hidden = placeSelect.value !== 'other';
+  });
 
   saveBtn.addEventListener('click', async () => {
     const date = row.querySelector('.s-date').value || null;
-    const weekday = row.querySelector('.s-weekday').value.trim() || null;
+    const weekday = row.querySelector('.s-weekday').value || null;
     if (!date && !weekday) {
-      status.textContent = 'Necesita fecha o día recurrente.';
+      status.textContent = 'Indica una fecha o el día en que se repite.';
+      return;
+    }
+    const place = placeSelect.value;
+    const locationText = row.querySelector('.s-location-text').value.trim();
+    if (place === 'other' && !locationText) {
+      status.textContent = 'Escribe dónde es la sesión.';
       return;
     }
     const payload = {
       activity_id: activityId,
       date,
-      weekday,
+      weekday: date ? null : weekday,
       time_start: row.querySelector('.s-start').value || null,
       time_end: row.querySelector('.s-end').value || null,
       topic: row.querySelector('.s-topic').value.trim() || null,
       speaker: row.querySelector('.s-speaker').value.trim() || null,
       price: row.querySelector('.s-price').value.trim() || null,
-      location_id: row.querySelector('.s-location').value || null,
+      location_id: place === 'polonia' ? poloniaId : null,
+      location_text: place === 'other' ? locationText : place === 'polonia' && !poloniaId ? 'Polonia' : null,
     };
     saveBtn.disabled = true;
     status.textContent = 'Guardando…';
     const { error } = await db.save('sessions', { id, ...payload });
     saveBtn.disabled = false;
-    if (error) {
-      status.textContent = 'Error: ' + error.message;
-    } else {
-      loadActividades();
-    }
+    if (error) status.textContent = 'Error: ' + error.message;
+    else loadActividades();
   });
 
   deleteBtn?.addEventListener('click', async () => {
     if (!confirm('¿Borrar esta sesión?')) return;
     const { error } = await db.remove('sessions', id);
-    if (error) {
-      status.textContent = 'Error: ' + error.message;
-    } else {
-      loadActividades();
-    }
+    if (error) status.textContent = 'Error: ' + error.message;
+    else loadActividades();
   });
 }
 
-function wireActivityCards(container, { locOptions }) {
-  container.querySelectorAll('.crud-card').forEach((card) => {
-    const id = card.dataset.id;
-    const saveBtn = card.querySelector('.save');
-    const deleteBtn = card.querySelector('.delete');
-    const status = card.querySelector('.crud-actions .status');
+function wireActivityCard(card) {
+  const id = card.dataset.id;
+  const saveBtn = card.querySelector(':scope > .crud-actions .save');
+  const deleteBtn = card.querySelector(':scope > .crud-actions .delete');
+  const status = card.querySelector(':scope > .crud-actions .status');
+  const categorySelect = card.querySelector('.f-category');
+  const newCategoryRow = card.querySelector('.new-category');
+  categorySelect.addEventListener('change', () => {
+    newCategoryRow.hidden = categorySelect.value !== NEW_CATEGORY;
+    if (!newCategoryRow.hidden) card.querySelector('.f-new-category').focus();
+  });
 
-    const fileInput = card.querySelector('.image-input');
-    const photoField = card.querySelector('.f-photo');
-    if (fileInput) {
-      const preview = card.querySelector('.image-preview');
-      const uploadStatus = card.querySelector('.upload-status');
-      fileInput.addEventListener('change', async () => {
-        const file = fileInput.files[0];
-        if (!file) return;
-        uploadStatus.textContent = 'Subiendo…';
-        try {
-          const url = await uploadImage(file);
-          photoField.value = url;
-          preview.src = previewSrc(url);
-          preview.hidden = false;
-          uploadStatus.textContent = 'Subida ✓ — falta Guardar';
-        } catch (err) {
-          uploadStatus.textContent = 'Error: ' + err.message;
-        }
-      });
+  const fileInput = card.querySelector('.image-input');
+  const photoField = card.querySelector('.f-photo');
+  const preview = card.querySelector('.image-preview');
+  const uploadStatus = card.querySelector('.upload-status');
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    uploadStatus.textContent = 'Subiendo…';
+    try {
+      const url = await uploadImage(file);
+      photoField.value = url;
+      preview.src = previewSrc(url);
+      preview.hidden = false;
+      uploadStatus.textContent = 'Subida ✓ — falta Guardar';
+    } catch (err) {
+      uploadStatus.textContent = 'Error: ' + err.message;
+    }
+  });
+
+  saveBtn.addEventListener('click', async () => {
+    const title = card.querySelector('.f-title').value.trim();
+    if (!title) {
+      status.textContent = 'El título es obligatorio.';
+      return;
+    }
+    const registration = readRegistration(card);
+    if (registration.error) {
+      status.textContent = registration.error;
+      return;
+    }
+    saveBtn.disabled = true;
+    status.textContent = 'Guardando…';
+
+    let categoryId = categorySelect.value;
+    if (categoryId === NEW_CATEGORY) {
+      const name = card.querySelector('.f-new-category').value.trim();
+      const { data: created, error: catError } = await attempt(api('category_create', { method: 'POST', body: { name } }));
+      if (catError) {
+        saveBtn.disabled = false;
+        status.textContent = 'Error: ' + catError.message;
+        return;
+      }
+      categoryId = created.id;
     }
 
-    saveBtn.addEventListener('click', async () => {
-      const title = card.querySelector('.f-title').value.trim();
-      if (!title) {
-        status.textContent = 'El título es obligatorio.';
-        return;
-      }
-      const payload = {
-        title,
-        category_id: card.querySelector('.f-category').value,
-        format: card.querySelector('.f-format').value,
-        visible: card.querySelector('.f-visible').checked,
-        description: card.querySelector('.f-desc').value.trim() || null,
-        photo_url: photoField.value.trim() || null,
-        contact_name: card.querySelector('.f-contact-name').value.trim() || null,
-        contact_phone: card.querySelector('.f-contact-phone').value.trim() || null,
-      };
-      const registration = readRegistration(card);
-      if (registration.error) {
-        status.textContent = registration.error;
-        return;
-      }
-      Object.assign(payload, registration.values);
-      saveBtn.disabled = true;
-      status.textContent = 'Guardando…';
-      const { data, error } = await db.save('activities', { id, ...payload });
-      saveBtn.disabled = false;
-      if (error) {
-        status.textContent = 'Error: ' + error.message;
-      } else {
-        if (!id) {
-          flashMessage = data?.notified
-            ? `Actividad creada. Se envió una notificación a ${data.notified} dispositivo${data.notified > 1 ? 's' : ''}.`
-            : 'Actividad creada.';
-        }
-        loadActividades();
-      }
-    });
+    const payload = {
+      title,
+      category_id: categoryId,
+      format: card.querySelector('.f-format').value,
+      visible: card.querySelector('.f-visible').checked,
+      description: card.querySelector('.f-desc').value.trim() || null,
+      photo_url: photoField.value.trim() || null,
+      ...registration.values,
+    };
+    const { data, error } = await db.save('activities', { id, ...payload });
+    saveBtn.disabled = false;
+    if (error) {
+      status.textContent = 'Error: ' + error.message;
+      return;
+    }
+    if (!id) {
+      flashMessage = data?.notified
+        ? `Actividad creada. Se envió una notificación a ${data.notified} dispositivo${data.notified > 1 ? 's' : ''}. Agrégale sus sesiones abajo.`
+        : 'Actividad creada. Agrégale sus sesiones abajo.';
+      openAfterReload = 'a-' + data.id;
+    }
+    loadActividades();
+  });
 
-    deleteBtn?.addEventListener('click', async () => {
-      if (!confirm('¿Borrar esta actividad y todas sus sesiones?')) return;
-      const { error } = await db.remove('activities', id);
-      if (error) {
-        status.textContent = 'Error: ' + error.message;
-      } else {
-        loadActividades();
-      }
-    });
+  deleteBtn?.addEventListener('click', async () => {
+    if (!confirm('¿Borrar esta actividad y todas sus sesiones?')) return;
+    const { error } = await db.remove('activities', id);
+    if (error) status.textContent = 'Error: ' + error.message;
+    else loadActividades();
+  });
 
-    card.querySelectorAll('.session-crud-row').forEach((row) => wireSessionRow(row, locOptions));
-    wireRegistration(card);
+  card.querySelectorAll('.session-crud-row').forEach(wireSessionRow);
+  wireRegistration(card);
 
-    card.querySelector('.add-session')?.addEventListener('click', () => {
-      const list = card.querySelector('.sessions-list');
-      const wrapper = document.createElement('div');
-      wrapper.innerHTML = sessionRowHtml(null, id, locOptions);
-      const row = wrapper.firstElementChild;
-      list.appendChild(row);
-      wireSessionRow(row, locOptions);
-    });
+  card.querySelector('.add-session')?.addEventListener('click', () => {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = sessionRowHtml(null, id);
+    const row = wrapper.firstElementChild;
+    card.querySelector('.sessions-list').appendChild(row);
+    wireSessionRow(row);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tab: Proyectos (páginas dentro de Quiénes somos; uno puede mostrarse en el inicio).
+// Cada proyecto tiene secciones con texto, tarjetas y botones; si se le asigna una
+// categoría, su página lista las próximas y anteriores actividades de esa categoría.
+// ---------------------------------------------------------------------------
+function cardRowHtml(c = {}) {
+  return `
+    <div class="sub-row card-row">
+      <input type="text" class="c-title" value="${esc(c.title)}" placeholder="Título (ej. Familia)">
+      <textarea class="c-text" placeholder="Texto">${esc(c.text)}</textarea>
+      <input type="text" class="c-meta" value="${esc(c.meta)}" placeholder="Detalle (ej. Sábados por la mañana)">
+      <button type="button" class="remove" title="Quitar">×</button>
+    </div>`;
+}
+
+function buttonRowHtml(b = {}) {
+  return `
+    <div class="sub-row button-row">
+      <input type="text" class="b-label" value="${esc(b.label)}" placeholder="Texto del botón">
+      <input type="text" class="b-url" value="${esc(b.url)}" placeholder="Link (opcional: https://… o un número de WhatsApp)">
+      <button type="button" class="remove" title="Quitar">×</button>
+    </div>`;
+}
+
+function sectionHtml(s = {}) {
+  return `
+    <div class="section-editor">
+      <div class="crud-row">
+        <div><label>Título de la sección</label><input type="text" class="sec-title" value="${esc(s.title)}"></div>
+        <div style="flex:0 0 auto;align-self:flex-end;"><button type="button" class="remove-section">Quitar sección</button></div>
+      </div>
+      <div class="crud-row"><div><label>Texto (usa **texto** para destacar; los números de WhatsApp se vuelven links)</label>
+        <textarea class="sec-text" rows="3">${esc(s.text)}</textarea></div></div>
+      <label class="sub-label">Tarjetas</label>
+      <div class="cards">${(s.cards || []).map(cardRowHtml).join('')}</div>
+      <button type="button" class="add-btn add-card">+ tarjeta</button>
+      <label class="sub-label">Botones</label>
+      <div class="buttons">${(s.buttons || []).map(buttonRowHtml).join('')}</div>
+      <button type="button" class="add-btn add-button">+ botón</button>
+    </div>`;
+}
+
+async function loadProyectos() {
+  const container = document.getElementById('tab-content');
+  const wasOpen = new Set([...container.querySelectorAll('details[open][data-key]')].map((d) => d.dataset.key));
+  if (openAfterReload) wasOpen.add(openAfterReload);
+  openAfterReload = null;
+  container.innerHTML = `<p class="loading-note">Cargando…</p>`;
+  const [{ data: projects, error: e1 }, { data: categories, error: e2 }] = await Promise.all([db.list('projects'), db.list('categories')]);
+  if (e1 || e2) {
+    container.innerHTML = `<p class="loading-note">Error: ${esc((e1 || e2).message)}</p>`;
+    return;
+  }
+  const catOptions = (selected) =>
+    `<option value="">(sin actividades)</option>` +
+    categories
+      .filter((c) => c.slug !== 'publicaciones' && (c.visible || c.id === selected))
+      .map((c) => `<option value="${c.id}" ${c.id === selected ? 'selected' : ''}>${esc(c.name)}</option>`)
+      .join('');
+
+  function projectFormHtml(p) {
+    return `
+      <div class="crud-card project-card" data-id="${p?.id || ''}">
+        <div class="crud-row">
+          <div><label>Nombre</label><input type="text" class="p-title" value="${esc(p?.title)}"></div>
+          <div><label>Bajada corta (ej. Santiago Centro)</label><input type="text" class="p-tagline" value="${esc(p?.tagline)}"></div>
+          <div style="flex:0 0 80px;"><label>Orden</label><input type="number" class="p-order" value="${p?.sort_order ?? 0}"></div>
+        </div>
+        <div class="crud-row">
+          <div><label>Frase principal (se muestra en el inicio y al comienzo de la página; usa **texto** para destacar)</label>
+          <textarea class="p-summary" rows="3">${esc(p?.summary)}</textarea></div>
+        </div>
+        <div class="crud-row">
+          <div>
+            <label>Logo o imagen</label>
+            <div class="image-field">
+              <img class="image-preview" src="${esc(previewSrc(p?.logo_url))}" ${p?.logo_url ? '' : 'hidden'}>
+              <input type="file" accept="image/*" class="image-input">
+              <span class="status upload-status"></span>
+            </div>
+            <input type="text" class="p-logo" value="${esc(p?.logo_url)}" placeholder="o pega una ruta/URL">
+          </div>
+        </div>
+        <div class="crud-row">
+          <div class="crud-check"><label><input type="checkbox" class="p-home" ${p?.show_on_home ? 'checked' : ''}> mostrar en el inicio</label></div>
+          <div class="crud-check"><label><input type="checkbox" class="p-visible" ${!p || p.visible ? 'checked' : ''}> visible</label></div>
+          <div><label>Dirección de la página</label><input type="text" class="p-slug" value="${esc(p?.slug)}" placeholder="se completa sola con el nombre"></div>
+        </div>
+        <div class="crud-row">
+          <div><label>Actividades del proyecto (categoría)</label><select class="p-category">${catOptions(p?.category_id)}</select></div>
+          <div class="p-labels" ${p?.category_id ? '' : 'hidden'}><label>Título de las próximas</label><input type="text" class="p-upcoming" value="${esc(p?.upcoming_label || 'Próximos encuentros')}"></div>
+          <div class="p-labels" ${p?.category_id ? '' : 'hidden'}><label>Título de las anteriores</label><input type="text" class="p-past" value="${esc(p?.past_label || 'Encuentros anteriores')}"></div>
+        </div>
+        <h4 class="sub-title">Secciones de la página</h4>
+        <div class="sections">${(p?.sections || []).map(sectionHtml).join('')}</div>
+        <button type="button" class="add-btn add-section">+ agregar sección</button>
+        <div class="crud-actions" style="margin-top:14px;">
+          <button class="save">${p ? 'Guardar proyecto' : 'Crear proyecto'}</button>
+          ${p ? `<button class="delete">Borrar</button>` : ''}
+          ${p ? `<a href="../#/quienes-somos/proyectos/${esc(p.slug)}" target="_blank" rel="noopener" style="font-size:0.82rem;">ver página →</a>` : ''}
+          <span class="status"></span>
+        </div>
+      </div>`;
+  }
+
+  container.innerHTML = `
+    <p class="tab-note">Los proyectos aparecen en <strong>Quiénes somos → Proyectos</strong>, cada uno con su propia página. Si marcas "mostrar en el inicio", su frase principal aparece en la portada con un botón "Ver más".</p>
+    <details class="acc acc-new" data-key="new-project">
+      <summary>+ Nuevo proyecto</summary>
+      ${projectFormHtml(null)}
+    </details>
+    ${projects
+      .map(
+        (p) => `
+      <details class="item" data-key="p-${p.id}">
+        <summary>
+          <span class="item-title">${esc(p.title)}${p.visible ? '' : ' <span class="badge warn">oculto</span>'}${p.show_on_home ? ' <span class="badge manual">en el inicio</span>' : ''}</span>
+          <span class="item-meta">/quienes-somos/proyectos/${esc(p.slug)}</span>
+        </summary>
+        ${projectFormHtml(p)}
+      </details>`
+      )
+      .join('')}`;
+
+  container.querySelectorAll('details[data-key]').forEach((d) => {
+    if (wasOpen.has(d.dataset.key)) d.open = true;
+  });
+  container.querySelectorAll('.project-card').forEach(wireProjectCard);
+}
+
+function wireProjectCard(card) {
+  const id = card.dataset.id;
+  const status = card.querySelector(':scope > .crud-actions .status');
+
+  // Agregar / quitar secciones, tarjetas y botones (delegado)
+  card.addEventListener('click', (e) => {
+    const t = e.target;
+    if (t.matches('.add-section')) card.querySelector('.sections').insertAdjacentHTML('beforeend', sectionHtml());
+    else if (t.matches('.remove-section') && confirm('¿Quitar esta sección?')) t.closest('.section-editor').remove();
+    else if (t.matches('.add-card')) t.previousElementSibling.insertAdjacentHTML('beforeend', cardRowHtml());
+    else if (t.matches('.add-button')) t.previousElementSibling.insertAdjacentHTML('beforeend', buttonRowHtml());
+    else if (t.matches('.sub-row .remove')) t.closest('.sub-row').remove();
+  });
+  card.querySelector('.p-category').addEventListener('change', (e) => {
+    card.querySelectorAll('.p-labels').forEach((el) => (el.hidden = !e.target.value));
+  });
+
+  const fileInput = card.querySelector('.image-input');
+  const logoField = card.querySelector('.p-logo');
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const uploadStatus = card.querySelector('.upload-status');
+    uploadStatus.textContent = 'Subiendo…';
+    try {
+      const url = await uploadImage(file);
+      logoField.value = url;
+      const preview = card.querySelector('.image-preview');
+      preview.src = previewSrc(url);
+      preview.hidden = false;
+      uploadStatus.textContent = 'Subida ✓ — falta Guardar';
+    } catch (err) {
+      uploadStatus.textContent = 'Error: ' + err.message;
+    }
+  });
+
+  card.querySelector(':scope > .crud-actions .save').addEventListener('click', async () => {
+    const title = card.querySelector('.p-title').value.trim();
+    if (!title) {
+      status.textContent = 'El nombre es obligatorio.';
+      return;
+    }
+    const sections = [...card.querySelectorAll('.section-editor')].map((sec) => ({
+      title: sec.querySelector('.sec-title').value.trim(),
+      text: sec.querySelector('.sec-text').value.trim(),
+      cards: [...sec.querySelectorAll('.card-row')]
+        .map((r) => ({ title: r.querySelector('.c-title').value.trim(), text: r.querySelector('.c-text').value.trim(), meta: r.querySelector('.c-meta').value.trim() }))
+        .filter((c) => c.title || c.text),
+      buttons: [...sec.querySelectorAll('.button-row')]
+        .map((r) => ({ label: r.querySelector('.b-label').value.trim(), url: r.querySelector('.b-url').value.trim() }))
+        .filter((b) => b.label),
+    }));
+    const category = card.querySelector('.p-category').value || null;
+    const payload = {
+      id,
+      title,
+      slug: card.querySelector('.p-slug').value.trim() || title,
+      tagline: card.querySelector('.p-tagline').value.trim() || null,
+      summary: card.querySelector('.p-summary').value.trim() || null,
+      logo_url: logoField.value.trim() || null,
+      show_on_home: card.querySelector('.p-home').checked,
+      visible: card.querySelector('.p-visible').checked,
+      sort_order: Number(card.querySelector('.p-order').value) || 0,
+      category_id: category,
+      upcoming_label: category ? card.querySelector('.p-upcoming').value.trim() || null : null,
+      past_label: category ? card.querySelector('.p-past').value.trim() || null : null,
+      sections,
+    };
+    status.textContent = 'Guardando…';
+    const { data, error } = await db.save('projects', payload);
+    if (error) {
+      status.textContent = 'Error: ' + error.message;
+      return;
+    }
+    openAfterReload = 'p-' + (id || data.id);
+    loadProyectos();
+  });
+
+  card.querySelector(':scope > .crud-actions .delete')?.addEventListener('click', async () => {
+    if (!confirm('¿Borrar este proyecto y su página?')) return;
+    const { error } = await db.remove('projects', id);
+    if (error) status.textContent = 'Error: ' + error.message;
+    else loadProyectos();
   });
 }
 

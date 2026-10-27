@@ -3,7 +3,7 @@
 // Home: frase + bajada → banner de la app (solo celular) → actividades próximas → Para rezar hoy.
 
 import { api } from './api.js';
-import { renderAppBanner } from './pwa.js?v=20261026';
+import { renderAppBanner } from './pwa.js?v=20261027';
 
 // Raíz real del sitio (docs/), calculada desde la ubicación de este script.
 const ASSETS_BASE = new URL('../../', import.meta.url).href;
@@ -13,7 +13,6 @@ function assetUrl(relPath) {
 }
 const MARK = assetUrl('assets/img/favicon.svg');
 
-const BUCKET_LABELS = { formacion: 'Espiritual', laboral: 'Trabajo', familia: 'Familia' };
 const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']; // índice = Date.getDay()
 const HOME_LIMIT = 6;
 
@@ -110,7 +109,7 @@ function registrationLink(activity) {
 // ---------------------------------------------------------------------------
 // Estado global (fetch una sola vez, se reusa entre vistas)
 // ---------------------------------------------------------------------------
-const state = { content: {}, categories: [], categoriesById: {}, activities: [], locationsById: {}, prayer: null };
+const state = { content: {}, categories: [], categoriesById: {}, activities: [], locationsById: {}, projects: [], prayer: null };
 
 async function loadData() {
   const data = await api('public');
@@ -120,6 +119,31 @@ async function loadData() {
   state.activities = (data.activities || []).filter((a) => state.categoriesById[a.category_id]);
   // Solo nombres: la dirección real nunca viene en la API pública.
   state.locationsById = Object.fromEntries((data.locations || []).map((l) => [l.id, l.name]));
+  state.projects = data.projects || [];
+}
+
+// Lugar de una sesión: Polonia (ubicación fija) o lo que se escribió a mano en el panel.
+const placeOf = (s) => (s?.location_id ? state.locationsById[s.location_id] : s?.location_text) || '';
+
+// Texto enriquecido de los proyectos: **negrita**, links y números de WhatsApp clickeables,
+// línea en blanco = párrafo nuevo. Con inline=true solo negrita (para usar dentro de un link).
+function richText(text, { inline = false } = {}) {
+  let html = esc(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  if (inline) return html.replace(/\n/g, ' ');
+  html = html
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
+    .replace(/(\+?56\s?9(?:\s?\d){8})/g, (m) => `<a href="https://wa.me/${m.replace(/\D/g, '')}" target="_blank" rel="noopener">${m}</a>`);
+  return html
+    .split(/\n{2,}/)
+    .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
+function buttonHref(url) {
+  const value = (url || '').trim();
+  if (/^https?:\/\//i.test(value)) return value;
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= 8 && !/[a-z]/i.test(value) ? `https://wa.me/${digits}` : '';
 }
 
 // ---------------------------------------------------------------------------
@@ -195,7 +219,7 @@ function activityListRow(a) {
   const occ = nextOccurrence(a);
   const first = (a.sessions || [])[0];
   const when = occ ? (occ.recurring ? fmtSession(occ.session) : fmtOccurrence(occ)) : first ? fmtSession(first) : '';
-  const place = occ?.session.location_id ? state.locationsById[occ.session.location_id] : '';
+  const place = placeOf(occ?.session);
   return `
     <a class="activity-row" href="#/actividad/${a.id}">
       <div class="thumb ${a.photo_url ? '' : 'placeholder'}" style="${a.photo_url ? `background-image:url('${esc(assetUrl(a.photo_url))}')` : ''}">
@@ -252,9 +276,20 @@ async function loadPrayer() {
 // ---------------------------------------------------------------------------
 // Vista: Home
 // ---------------------------------------------------------------------------
+function projectTeaser(p) {
+  return `
+    <a class="project-teaser" href="#/quienes-somos/proyectos/${esc(p.slug)}">
+      ${p.logo_url ? `<img class="pt-logo" src="${esc(assetUrl(p.logo_url))}" alt="${esc(p.title)}">` : `<p class="pt-title">${esc(p.title)}</p>`}
+      ${p.tagline ? `<p class="pt-tag">${esc(p.tagline)}</p>` : ''}
+      ${p.summary ? `<p class="pt-summary">${richText(p.summary, { inline: true })}</p>` : ''}
+      <span class="pt-more">Ver más →</span>
+    </a>`;
+}
+
 function renderHome() {
   renderChrome('home');
   const view = document.getElementById('view');
+  const homeProjects = state.projects.filter((p) => Number(p.show_on_home));
   view.innerHTML = `
     <section class="hero">
       <h1>${esc(state.content['hero.title'])}</h1>
@@ -264,11 +299,16 @@ function renderHome() {
     <section class="section" style="padding-bottom:10px;">
       <h2 class="section-title" style="margin:0;">Actividades</h2>
     </section>
-    <nav class="chips" id="chips" aria-label="Filtrar por foco"></nav>
-    <nav class="subchips" id="subchips" aria-label="Filtrar por categoría"></nav>
+    <nav class="chips" id="chips" aria-label="Filtrar por categoría"></nav>
     <div id="home-activities"></div>
     <a class="see-all" href="#/actividades">Ver todas las actividades →</a>
     ${prayerSection()}
+    ${
+      homeProjects.length
+        ? `<section class="section" style="padding-top:30px;"><h2 class="section-title" style="margin:0;">Proyectos</h2></section>
+           <div class="projects-list">${homeProjects.map(projectTeaser).join('')}</div>`
+        : ''
+    }
     <div class="about-teaser">
       <h2>Quiénes somos</h2>
       <p>${esc(state.content['quienes_somos.teaser'])}</p>
@@ -278,33 +318,29 @@ function renderHome() {
   renderAppBanner(document.getElementById('app-banner-slot'));
   loadPrayer();
 
-  const bucketOrder = ['formacion', 'laboral', 'familia'];
-  const bucketsPresent = bucketOrder.filter((b) => state.categories.some((c) => c.bucket === b));
+  // Solo las categorías con actividades próximas o semanales; las demás se ocultan hasta
+  // que tengan una actividad nueva.
+  const activeCategories = state.categories.filter((c) =>
+    state.activities.some((a) => a.category_id === c.id && nextOccurrence(a))
+  );
   const chipsEl = document.getElementById('chips');
-  const subchipsEl = document.getElementById('subchips');
-  chipsEl.innerHTML =
-    `<button class="chip active" data-bucket="todas">Todas</button>` +
-    bucketsPresent.map((b) => `<button class="chip" data-bucket="${b}">${BUCKET_LABELS[b]}</button>`).join('');
+  chipsEl.innerHTML = activeCategories.length
+    ? `<button class="chip active" data-category="">Todas</button>` +
+      activeCategories.map((c) => `<button class="chip" data-category="${c.id}">${esc(c.name)}</button>`).join('')
+    : '';
 
-  function renderSubchips(bucket) {
-    const cats = bucket === 'todas' ? [] : state.categories.filter((c) => c.bucket === bucket);
-    subchipsEl.innerHTML = cats.map((c) => `<button class="chip" data-category="${c.id}">${esc(c.name)}</button>`).join('');
-  }
-
-  // Próximas actividades: la más cercana primero; las semanales (círculos) solo el día que tocan.
-  function renderActivities({ bucket = 'todas', categoryId = null } = {}) {
-    let list = state.activities;
-    if (categoryId) list = list.filter((a) => a.category_id === categoryId);
-    else if (bucket !== 'todas') list = list.filter((a) => state.categoriesById[a.category_id]?.bucket === bucket);
+  // "Todas": la más cercana primero, y las semanales (círculos) solo el día que tocan.
+  // Una categoría: todas sus próximas, incluidas las semanales de otros días.
+  function renderActivities(categoryId = '') {
+    const list = categoryId ? state.activities.filter((a) => a.category_id === categoryId) : state.activities;
     const upcoming = list
-      .map((a) => ({ a, occ: nextOccurrence(a, { onlyTodayRecurring: true }) }))
+      .map((a) => ({ a, occ: nextOccurrence(a, { onlyTodayRecurring: !categoryId }) }))
       .filter((x) => x.occ)
       .sort((x, y) => x.occ.key.localeCompare(y.occ.key))
-      .slice(0, HOME_LIMIT);
-    const el = document.getElementById('home-activities');
-    el.innerHTML = upcoming.length
+      .slice(0, categoryId ? undefined : HOME_LIMIT);
+    document.getElementById('home-activities').innerHTML = upcoming.length
       ? `<div class="activities-grid">${upcoming.map((x) => activityCard(x.a, x.occ)).join('')}</div>`
-      : `<p class="empty-note">No hay actividades próximas en este filtro. <a href="#/actividades">Ver todas las actividades</a></p>`;
+      : `<p class="empty-note">No hay actividades para hoy. <a href="#/actividades">Ver todas las actividades</a></p>`;
   }
 
   renderActivities();
@@ -313,19 +349,7 @@ function renderHome() {
     const btn = e.target.closest('.chip');
     if (!btn) return;
     chipsEl.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === btn));
-    renderSubchips(btn.dataset.bucket);
-    renderActivities({ bucket: btn.dataset.bucket });
-  });
-
-  subchipsEl.addEventListener('click', (e) => {
-    const btn = e.target.closest('.chip');
-    if (!btn) return;
-    const wasActive = btn.classList.contains('active');
-    subchipsEl.querySelectorAll('.chip').forEach((c) => c.classList.remove('active'));
-    const bucket = chipsEl.querySelector('.chip.active')?.dataset.bucket || 'todas';
-    if (wasActive) return renderActivities({ bucket }); // segundo toque: quita el filtro de categoría
-    btn.classList.add('active');
-    renderActivities({ categoryId: btn.dataset.category });
+    renderActivities(btn.dataset.category);
   });
 }
 
@@ -437,13 +461,13 @@ function renderActividad(id) {
     <div class="sessions-list">
       ${sessions
         .map((s) => {
-          const place = s.location_id ? state.locationsById[s.location_id] : '';
+          const place = placeOf(s);
           return `
         <div class="session-row">
           <p class="when">${esc(fmtSession(s))}</p>
           ${s.topic ? `<p class="topic">${esc(s.topic)}</p>` : ''}
           ${s.speaker ? `<p class="speaker">Con ${esc(s.speaker)}</p>` : ''}
-          ${place ? `<p class="location">${esc(place)}${registration ? ' · dirección disponible al inscribirte' : ''}</p>` : ''}
+          ${place ? `<p class="location">${esc(place)}${registration && s.location_id ? ' · dirección disponible al inscribirte' : ''}</p>` : ''}
           ${s.price ? `<p class="price">${esc(s.price)}</p>` : ''}
         </div>`;
         })
@@ -459,7 +483,6 @@ function renderActividad(id) {
     }`;
 
   view.querySelector('.back').addEventListener('click', () => goBack(category ? `#/actividades/${category.slug}` : '#/'));
-  renderChatBubble(activity.contact_phone ? { name: activity.contact_name, phone: activity.contact_phone } : null);
 }
 
 // ---------------------------------------------------------------------------
@@ -486,6 +509,14 @@ function renderQuienesSomos() {
       <ul class="about-list">${state.categories.map((c) => `<li>${esc(c.name)}</li>`).join('')}</ul>
     </section>
     ${
+      state.projects.length
+        ? `<section class="section about-block" id="proyectos">
+      <h2 class="section-title eyebrow">Proyectos</h2>
+    </section>
+    <div class="projects-list">${state.projects.map(projectTeaser).join('')}</div>`
+        : ''
+    }
+    ${
       address
         ? `<section class="section about-block">
       <h2 class="section-title eyebrow">Cómo llegar</h2>
@@ -494,6 +525,101 @@ function renderQuienesSomos() {
     </section>`
         : ''
     }`;
+}
+
+// ---------------------------------------------------------------------------
+// Vista: página de un proyecto (Quiénes somos → Proyectos → …)
+// ---------------------------------------------------------------------------
+const PIN_ICON =
+  '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg>';
+
+function projectSessionRow(item) {
+  const s = item.session;
+  const place = placeOf(s);
+  return `
+    <a class="session-row link" href="#/actividad/${item.activity.id}">
+      <p class="when">${esc(fmtSession(s))}</p>
+      ${s.topic ? `<p class="topic">${esc(s.topic)}</p>` : `<p class="topic">${esc(item.activity.title)}</p>`}
+      ${s.speaker ? `<p class="speaker">Con ${esc(s.speaker)}</p>` : ''}
+      ${place ? `<p class="location">${esc(place)}</p>` : ''}
+    </a>`;
+}
+
+function renderProyecto(slug) {
+  renderChrome('quienes-somos');
+  const view = document.getElementById('view');
+  const p = state.projects.find((x) => x.slug === slug);
+  if (!p) {
+    view.innerHTML = `<p class="loading-note">Proyecto no encontrado. <a href="#/quienes-somos">Volver</a></p>`;
+    return;
+  }
+
+  let activitiesHtml = '';
+  if (p.category_id) {
+    const today = isoDate(new Date());
+    const items = state.activities
+      .filter((a) => a.category_id === p.category_id)
+      .flatMap((a) => (a.sessions || []).map((session) => ({ activity: a, session })));
+    const upcoming = items
+      .filter((i) => !i.session.date || i.session.date >= today)
+      .sort((x, y) => String(x.session.date || '0').localeCompare(String(y.session.date || '0')));
+    const past = items.filter((i) => i.session.date && i.session.date < today).sort((x, y) => y.session.date.localeCompare(x.session.date));
+    activitiesHtml = `
+      <section class="project-section">
+        <h2>${esc(p.upcoming_label || 'Próximos encuentros')}</h2>
+        ${upcoming.length ? `<div class="sessions-list flush">${upcoming.map(projectSessionRow).join('')}</div>` : `<p class="empty-note flush">Pronto publicaremos el próximo encuentro.</p>`}
+      </section>
+      <section class="project-section">
+        <h2>${esc(p.past_label || 'Encuentros anteriores')}</h2>
+        ${past.length ? `<div class="sessions-list flush past">${past.map(projectSessionRow).join('')}</div>` : `<p class="empty-note flush">Todavía no hay encuentros anteriores.</p>`}
+      </section>`;
+  }
+
+  view.innerHTML = `
+    <nav class="page-nav"><button type="button" class="back">← Volver</button></nav>
+    <section class="project-hero">
+      ${p.logo_url ? `<img class="project-logo" src="${esc(assetUrl(p.logo_url))}" alt="${esc(p.title)}">` : ''}
+      <h1 ${p.logo_url ? 'class="visually-hidden"' : ''}>${esc(p.title)}</h1>
+      ${p.tagline ? `<p class="project-tag">${PIN_ICON}${esc(p.tagline)}</p>` : ''}
+      ${p.summary ? `<div class="project-summary">${richText(p.summary)}</div>` : ''}
+    </section>
+    ${(p.sections || [])
+      .map(
+        (sec) => `
+      <section class="project-section">
+        ${sec.title ? `<h2>${esc(sec.title)}</h2>` : ''}
+        ${sec.text ? `<div class="project-text">${richText(sec.text)}</div>` : ''}
+        ${
+          sec.cards?.length
+            ? `<div class="project-cards">${sec.cards
+                .map(
+                  (c, i) => `
+              <div class="project-card tone-${i % 3}">
+                ${c.title ? `<h3>${esc(c.title)}</h3>` : ''}
+                ${c.text ? `<p>${esc(c.text)}</p>` : ''}
+                ${c.meta ? `<p class="meta">${esc(c.meta)}</p>` : ''}
+              </div>`
+                )
+                .join('')}</div>`
+            : ''
+        }
+        ${
+          sec.buttons?.length
+            ? `<div class="project-buttons">${sec.buttons
+                .map((b, i) => {
+                  const href = buttonHref(b.url);
+                  return href
+                    ? `<a class="pill tone-${i % 3}" href="${esc(href)}" target="_blank" rel="noopener">${esc(b.label)}</a>`
+                    : `<span class="pill tone-${i % 3}">${esc(b.label)}</span>`;
+                })
+                .join('')}</div>`
+            : ''
+        }
+      </section>`
+      )
+      .join('')}
+    ${activitiesHtml}`;
+  view.querySelector('.back').addEventListener('click', () => goBack('#/quienes-somos'));
 }
 
 // ---------------------------------------------------------------------------
@@ -534,6 +660,7 @@ function route() {
   else if (parts[0] === 'actividades' && parts.length === 1) renderCategorias();
   else if (parts[0] === 'actividades' && parts.length === 2) renderCategoria(parts[1]);
   else if (parts[0] === 'actividad' && parts[1]) renderActividad(parts[1]);
+  else if (parts[0] === 'quienes-somos' && parts[1] === 'proyectos' && parts[2]) renderProyecto(parts[2]);
   else if (parts[0] === 'quienes-somos') renderQuienesSomos();
   else renderHome();
 
