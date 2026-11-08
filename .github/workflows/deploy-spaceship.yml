@@ -130,6 +130,6 @@ jobs:
             echo "OK $path"
           }
           check / 'og:title'
-          check /actividades '<title>Actividades — Poloniapp</title>'
-          check /quienes-somos '<title>Quiénes somos — Poloniapp</title>'
+          check /actividades '<title>Actividades — Polonia</title>'
+          check /quienes-somos '<title>Quiénes somos — Polonia</title>'
           check '/api/?action=status' 'needs_setup'

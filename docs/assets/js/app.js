@@ -3,7 +3,7 @@
 // Home: frase + bajada → banner de la app (solo celular) → actividades próximas → Para rezar hoy.
 
 import { api } from './api.js';
-import { renderAppBanner, openNotifications } from './pwa.js?v=20261031';
+import { renderAppBanner, openNotifications } from './pwa.js?v=20261108';
 
 // Raíz real del sitio (docs/), calculada desde la ubicación de este script.
 const ASSETS_BASE = new URL('../../', import.meta.url).href;
@@ -292,8 +292,24 @@ function circleRow(a, occ, { showDay }) {
     </a>`;
 }
 
+// Tres categorías principales (categories.bucket). Las categorías de la base son etiquetas
+// dentro de ellas (ej. Formación · Retiros).
+const MAIN_CATEGORIES = [
+  { key: 'formacion', slug: 'formacion', label: 'Formación' },
+  { key: 'laboral', slug: 'trabajo', label: 'Trabajo' },
+  { key: 'familia', slug: 'familia', label: 'Familia' },
+];
+const mainOf = (a) => MAIN_CATEGORIES.find((m) => m.key === state.categoriesById[a.category_id]?.bucket) || null;
+const tagLabel = (a) => [mainOf(a)?.label, state.categoriesById[a.category_id]?.name].filter(Boolean).join(' · ');
+
+function withNext(items, opts) {
+  return items
+    .map((a) => ({ a, occ: nextOccurrence(a, opts) }))
+    .filter((x) => x.occ)
+    .sort((x, y) => x.occ.key.localeCompare(y.occ.key));
+}
+
 function activityCard(a, occ) {
-  const category = state.categoriesById[a.category_id];
   const isToday = occ && occ.date === isoDate(new Date());
   return `
     <a class="activity-card" href="${activityHref(a)}">
@@ -303,7 +319,7 @@ function activityCard(a, occ) {
           : `<div class="photo placeholder"><img src="${MARK}" alt="">${isToday ? '<span class="badge-today">HOY</span>' : ''}</div>`
       }
       <div class="info">
-        <p class="cat">${esc(category?.name)}</p>
+        <p class="cat">${esc(tagLabel(a))}</p>
         <p class="title">${esc(a.title)}</p>
         ${whenLines(a, occ)}
       </div>
@@ -389,6 +405,7 @@ function renderHome() {
   renderChrome('home');
   const view = document.getElementById('view');
   const homeProjects = state.projects.filter((p) => Number(p.show_on_home));
+  // Orden: Actividades → Proyectos → Confesiones → Para rezar hoy → Quiénes somos
   view.innerHTML = `
     <section class="hero">
       <h1>${esc(state.content['hero.title'])}</h1>
@@ -401,7 +418,12 @@ function renderHome() {
     <nav class="chips" id="chips" aria-label="Filtrar por categoría"></nav>
     <div id="home-activities"></div>
     <a class="see-all" href="/actividades">Ver todas las actividades →</a>
-    ${prayerSection()}
+    ${
+      homeProjects.length
+        ? `<section class="section" style="padding-top:30px;"><h2 class="section-title" style="margin:0;">Proyectos</h2></section>
+           <div class="projects-list">${homeProjects.map(projectTeaser).join('')}</div>`
+        : ''
+    }
     ${
       state.content['confesiones.booking_url']
         ? `<section class="confession-card">
@@ -411,12 +433,7 @@ function renderHome() {
            </section>`
         : ''
     }
-    ${
-      homeProjects.length
-        ? `<section class="section" style="padding-top:30px;"><h2 class="section-title" style="margin:0;">Proyectos</h2></section>
-           <div class="projects-list">${homeProjects.map(projectTeaser).join('')}</div>`
-        : ''
-    }
+    ${prayerSection()}
     <div class="about-teaser">
       <h2>Quiénes somos</h2>
       <p>${esc(state.content['quienes_somos.teaser'])}</p>
@@ -426,33 +443,25 @@ function renderHome() {
   renderAppBanner(document.getElementById('app-banner-slot'));
   loadPrayer();
 
-  // Solo las categorías con actividades próximas o semanales; las demás se ocultan hasta
-  // que tengan una actividad nueva.
+  // Filtros: las categorías principales que tienen actividades próximas o semanales.
   const hideCircles = monthlyRetreatThisWeek();
-  const activeCategories = state.categories.filter(
-    (c) => !(hideCircles && c.slug === 'circulos') && state.activities.some((a) => a.category_id === c.id && nextOccurrence(a))
-  );
+  const active = MAIN_CATEGORIES.filter((m) => state.activities.some((a) => mainOf(a)?.key === m.key && nextOccurrence(a)));
   const chipsEl = document.getElementById('chips');
-  chipsEl.innerHTML = activeCategories.length
-    ? `<button class="chip active" data-category="">Todas</button>` +
-      activeCategories.map((c) => `<button class="chip" data-category="${c.id}">${esc(c.name)}</button>`).join('')
+  chipsEl.innerHTML = active.length
+    ? `<button class="chip active" data-main="">Todas</button>` +
+      active.map((m) => `<button class="chip" data-main="${m.key}">${m.label}</button>`).join('')
     : '';
 
-  // Círculos: solo título y hora, en una lista aparte ("Todas": solo los de hoy; filtro
-  // Círculos: todos, con el día). Resto: las 4 más próximas, con imagen.
-  function renderActivities(categoryId = '') {
-    const list = categoryId ? state.activities.filter((a) => a.category_id === categoryId) : state.activities;
-    const withNext = (items, opts) =>
-      items
-        .map((a) => ({ a, occ: nextOccurrence(a, opts) }))
-        .filter((x) => x.occ)
-        .sort((x, y) => x.occ.key.localeCompare(y.occ.key));
-    const circles = hideCircles ? [] : withNext(list.filter(isCircle), { onlyTodayRecurring: !categoryId });
+  // En el inicio solo lo que viene: las 4 actividades más próximas (aparte de los círculos,
+  // que van en lista compacta y solo el día que tocan).
+  function renderActivities(mainKey = '') {
+    const list = mainKey ? state.activities.filter((a) => mainOf(a)?.key === mainKey) : state.activities;
+    const circles = hideCircles ? [] : withNext(list.filter(isCircle), { onlyTodayRecurring: true });
     const others = withNext(list.filter((a) => !isCircle(a))).slice(0, HOME_LIMIT);
     const circlesHtml = circles.length
       ? `<div class="circle-list">
-           <p class="circle-head">${categoryId ? 'Círculos' : 'Círculos de hoy'}</p>
-           ${circles.map((x) => circleRow(x.a, x.occ, { showDay: !!categoryId })).join('')}
+           <p class="circle-head">Círculos de hoy</p>
+           ${circles.map((x) => circleRow(x.a, x.occ, { showDay: false })).join('')}
          </div>`
       : '';
     const othersHtml = others.length ? `<div class="activities-grid">${others.map((x) => activityCard(x.a, x.occ)).join('')}</div>` : '';
@@ -468,40 +477,98 @@ function renderHome() {
     const btn = e.target.closest('.chip');
     if (!btn) return;
     chipsEl.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === btn));
-    renderActivities(btn.dataset.category);
+    renderActivities(btn.dataset.main);
   });
 }
 
 // ---------------------------------------------------------------------------
-// Vista: grilla de categorías (Actividades)
+// Vista: Actividades (todas las próximas + las anteriores del año), con filtro
+// Formación / Trabajo / Familia. /actividades/formacion abre con ese filtro.
 // ---------------------------------------------------------------------------
-function renderCategorias() {
+function lastPastDate(a) {
+  const today = isoDate(new Date());
+  return (a.sessions || [])
+    .map((s) => s.date)
+    .filter((d) => d && d < today)
+    .sort()
+    .pop();
+}
+
+function pastRow(a) {
+  const last = lastPastDate(a);
+  const label = new Date(last + 'T00:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
+  return `
+    <a class="activity-row" href="${activityHref(a)}">
+      ${
+        isCircle(a)
+          ? ''
+          : `<div class="thumb ${a.photo_url ? '' : 'placeholder'}" style="${a.photo_url ? `background-image:url('${esc(assetUrl(a.photo_url))}')` : ''}">
+        ${a.photo_url ? '' : `<img src="${MARK}" alt="">`}
+      </div>`
+      }
+      <div>
+        <p class="title">${esc(a.title)}</p>
+        <p class="when past">${esc(label.charAt(0).toUpperCase() + label.slice(1))}</p>
+        <p class="meta">${esc(tagLabel(a))}</p>
+      </div>
+    </a>`;
+}
+
+function renderActividades(mainSlug = '') {
   renderChrome('actividades');
   const view = document.getElementById('view');
+  const year = String(new Date().getFullYear());
+  const available = MAIN_CATEGORIES.filter((m) => state.activities.some((a) => mainOf(a)?.key === m.key));
+  const selected = MAIN_CATEGORIES.find((m) => m.slug === mainSlug);
+
   view.innerHTML = `
     <section class="page-title"><h1>Actividades</h1></section>
-    <div class="categories-grid">
-      ${state.categories
-        .map((c) => {
-          const count = state.activities.filter((a) => a.category_id === c.id).length;
-          const countLabel =
-            c.slug === 'confesiones' && state.content['confesiones.booking_url']
-              ? 'Reservar hora'
-              : count > 0
-              ? `${count} actividad${count > 1 ? 'es' : ''}`
-              : 'Próximamente';
-          return `
-            <a class="category-card" href="/actividades/${c.slug}">
-              <p class="cat-name">${esc(c.name)}</p>
-              <p class="cat-count">${countLabel}</p>
-            </a>`;
-        })
-        .join('')}
-    </div>`;
+    <nav class="chips" id="act-chips" aria-label="Filtrar por categoría" style="padding-top:12px;">
+      <button class="chip ${selected ? '' : 'active'}" data-main="">Todas</button>
+      ${available.map((m) => `<button class="chip ${selected?.key === m.key ? 'active' : ''}" data-main="${m.key}" data-slug="${m.slug}">${m.label}</button>`).join('')}
+    </nav>
+    <div id="act-upcoming"></div>
+    <section class="section"><h2 class="section-title" style="margin:0;">Actividades anteriores</h2></section>
+    <div id="act-past"></div>`;
+
+  function renderLists(mainKey) {
+    const list = mainKey ? state.activities.filter((a) => mainOf(a)?.key === mainKey) : state.activities;
+    const circles = withNext(list.filter(isCircle));
+    const upcoming = withNext(list.filter((a) => !isCircle(a)));
+    const past = list
+      .filter((a) => !nextOccurrence(a) && (lastPastDate(a) || '').startsWith(year))
+      .sort((x, y) => lastPastDate(y).localeCompare(lastPastDate(x)));
+    document.getElementById('act-upcoming').innerHTML =
+      (circles.length
+        ? `<div class="circle-list"><p class="circle-head">Círculos</p>${circles.map((x) => circleRow(x.a, x.occ, { showDay: true })).join('')}</div>`
+        : '') +
+      (upcoming.length
+        ? `<div class="activities-grid">${upcoming.map((x) => activityCard(x.a, x.occ)).join('')}</div>`
+        : circles.length
+        ? ''
+        : `<p class="empty-note">No hay actividades próximas por ahora.</p>`);
+    document.getElementById('act-past').innerHTML = past.length
+      ? `<div class="activities-list">${past.map(pastRow).join('')}</div>`
+      : `<p class="empty-note">Todavía no hay actividades anteriores este año.</p>`;
+  }
+
+  renderLists(selected?.key || '');
+
+  const chipsEl = document.getElementById('act-chips');
+  chipsEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.chip');
+    if (!btn) return;
+    chipsEl.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c === btn));
+    // La dirección refleja el filtro (se puede compartir /actividades/familia) sin sumar pasos al "atrás".
+    history.replaceState(null, '', btn.dataset.slug ? `/actividades/${btn.dataset.slug}` : '/actividades');
+    currentPath = location.pathname;
+    document.title = pageTitle(location.pathname.split('/').filter(Boolean));
+    renderLists(btn.dataset.main);
+  });
 }
 
 // ---------------------------------------------------------------------------
-// Vista: lista de actividades de una categoría
+// Vista: lista de actividades de una etiqueta (ej. /actividades/retiros)
 // ---------------------------------------------------------------------------
 function renderCategoria(slug) {
   renderChrome('actividades');
@@ -565,7 +632,7 @@ function renderActividad(id) {
   view.innerHTML = `
     <nav class="page-nav">
       <button type="button" class="back">← Volver</button>
-      ${category ? `<a class="see-category" href="/actividades/${category.slug}">Ver todo: ${esc(category.name)} →</a>` : ''}
+      ${mainOf(activity) ? `<a class="see-category" href="/actividades/${mainOf(activity).slug}">Ver todo: ${mainOf(activity).label} →</a>` : ''}
     </nav>
     ${
       isCircle(activity)
@@ -575,7 +642,7 @@ function renderActividad(id) {
         : `<div class="detail-photo placeholder"><img src="${MARK}" alt=""></div>`
     }
     <section class="detail-head">
-      ${category ? `<p class="cat">${esc(category.name)}</p>` : ''}
+      ${category ? `<p class="cat">${esc(tagLabel(activity))}</p>` : ''}
       <h1>${esc(activity.title)}</h1>
       ${activity.description ? `<p>${esc(activity.description)}</p>` : ''}
     </section>
@@ -603,7 +670,7 @@ function renderActividad(id) {
         : ''
     }`;
 
-  view.querySelector('.back').addEventListener('click', () => goBack(category ? `/actividades/${category.slug}` : '/'));
+  view.querySelector('.back').addEventListener('click', () => goBack(mainOf(activity) ? `/actividades/${mainOf(activity).slug}` : '/actividades'));
   view.querySelector('.detail-photo.zoomable')?.addEventListener('click', () => openLightbox(assetUrl(activity.photo_url), activity));
 }
 
@@ -675,7 +742,10 @@ function renderQuienesSomos() {
     </section>
     <section class="section about-block">
       <h2 class="section-title eyebrow">Qué hacemos</h2>
-      <ul class="about-list">${state.categories.map((c) => `<li>${esc(c.name)}</li>`).join('')}</ul>
+      <ul class="about-list">${MAIN_CATEGORIES.map((m) => {
+        const tags = state.categories.filter((c) => c.bucket === m.key && state.activities.some((a) => a.category_id === c.id)).map((c) => c.name);
+        return `<li><strong>${m.label}</strong>${tags.length ? ': ' + esc(tags.join(', ')) : ''}</li>`;
+      }).join('')}</ul>
     </section>
     ${
       state.projects.length
@@ -803,7 +873,7 @@ function renderChatBubble(override) {
   if (!phone) return;
 
   const digits = phone.replace(/\D/g, '');
-  const greeting = override?.name ? `Hola ${override.name}, escribo desde Poloniapp 👋` : 'Hola, escribo desde Poloniapp 👋';
+  const greeting = override?.name ? `Hola ${override.name}, escribo desde Polonia 👋` : 'Hola, escribo desde Polonia 👋';
   const bubble = document.createElement('a');
   bubble.className = 'chat-bubble';
   bubble.href = `https://wa.me/${digits}?text=${encodeURIComponent(greeting)}`;
@@ -836,7 +906,8 @@ function route() {
   // Default: número general del centro. renderActividad lo cambia si la actividad tiene contacto propio.
   renderChatBubble(null);
   if (parts.length === 0) renderHome();
-  else if (parts[0] === 'actividades' && parts.length === 1) renderCategorias();
+  else if (parts[0] === 'actividades' && parts.length === 1) renderActividades();
+  else if (parts[0] === 'actividades' && MAIN_CATEGORIES.some((m) => m.slug === parts[1])) renderActividades(parts[1]);
   else if (parts[0] === 'actividades' && parts.length === 2) renderCategoria(parts[1]);
   else if (parts[0] === 'actividad' && parts[1]) renderActividad(parts[1]);
   else if (parts[0] === 'quienes-somos' && parts[1] === 'proyectos' && parts[2]) renderProyecto(parts[2]);
@@ -849,16 +920,17 @@ function route() {
 }
 
 function pageTitle(parts) {
-  const suffix = 'Poloniapp';
+  const suffix = 'Polonia';
   if (parts[0] === 'actividad') {
     const a = state.activities.find((x) => x.slug === parts[1] || x.id === parts[1]);
     return a ? `${a.title} — ${suffix}` : suffix;
   }
-  if (parts[0] === 'actividades' && parts[1]) return `${state.categories.find((c) => c.slug === parts[1])?.name || 'Actividades'} — ${suffix}`;
+  if (parts[0] === 'actividades' && parts[1])
+    return `${MAIN_CATEGORIES.find((m) => m.slug === parts[1])?.label || state.categories.find((c) => c.slug === parts[1])?.name || 'Actividades'} — ${suffix}`;
   if (parts[0] === 'actividades') return `Actividades — ${suffix}`;
   if (parts[0] === 'quienes-somos' && parts[2]) return `${state.projects.find((p) => p.slug === parts[2])?.title || 'Proyectos'} — ${suffix}`;
   if (parts[0] === 'quienes-somos') return `Quiénes somos — ${suffix}`;
-  return 'Poloniapp — Centro Cultural Opus Dei, Las Condes';
+  return 'Polonia — Centro Cultural Opus Dei, Las Condes';
 }
 
 async function init() {

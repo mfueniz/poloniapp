@@ -124,6 +124,19 @@ function migrations(): array
         6 => [
             'update_puentes_from_presentation',
         ],
+
+        // 2026-11-08: tres categorías principales (Formación / Trabajo / Familia, en
+        // categories.bucket) y las categorías de antes pasan a ser etiquetas dentro de ellas;
+        // círculos ocultos por ahora; Proyectos queda solo con Puentes.
+        7 => [
+            "UPDATE categories SET bucket = 'formacion' WHERE slug IN ('circulos', 'retiros', 'confesiones', 'charlas-formacion', 'visitas-pobres', 'colectas')",
+            "UPDATE categories SET bucket = 'laboral' WHERE slug = 'charlas-profesionales'",
+            "UPDATE categories SET bucket = 'familia' WHERE slug IN ('matrimonio-familia', 'encuentros-matrimoniales')",
+            // Etiquetas creadas desde el panel que no tenían grupo: quedan en Formación (se cambia en el panel).
+            "UPDATE categories SET bucket = 'formacion' WHERE bucket IS NULL AND slug <> 'publicaciones'",
+            "UPDATE activities a JOIN categories c ON c.id = a.category_id SET a.visible = 0 WHERE c.slug = 'circulos'",
+            "UPDATE projects SET visible = 0, show_on_home = 0 WHERE slug = 'encuentros-matrimoniales'",
+        ],
     ];
 }
 

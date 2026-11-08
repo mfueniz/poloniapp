@@ -1,7 +1,7 @@
 // poloniapp — service worker: permite instalar el sitio como app, lo deja usable sin
 // conexión (última versión vista) y muestra las notificaciones push.
 
-const CACHE = 'poloniapp-v7';
+const CACHE = 'poloniapp-v8';
 const SHELL = [
   './',
   './index.html',
@@ -12,7 +12,7 @@ const SHELL = [
   './assets/js/app.js',
   './assets/js/pwa.js',
   './assets/fonts/google-sans-latin.woff2',
-  './assets/img/poloniapp-logo.svg',
+  './assets/img/polonia-logo.svg',
   './assets/img/favicon.svg',
   './assets/img/para-rezar-hoy.webp',
 ];
@@ -69,10 +69,10 @@ self.addEventListener('push', (event) => {
           const res = await fetch('./api/?action=push_message', { cache: 'no-store' });
           msg = await res.json();
         } catch {
-          msg = { title: 'Poloniapp', body: 'Hay novedades en Poloniapp.', url: './' };
+          msg = { title: 'Polonia', body: 'Hay novedades en Polonia.', url: './' };
         }
       }
-      await self.registration.showNotification(msg.title || 'Poloniapp', {
+      await self.registration.showNotification(msg.title || 'Polonia', {
         body: msg.body || '',
         icon: './assets/img/icon-192.png',
         badge: './assets/img/icon-192.png',

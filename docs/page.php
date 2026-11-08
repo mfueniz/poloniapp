@@ -10,7 +10,7 @@ declare(strict_types=1);
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-cache');
 
-const DEFAULT_TITLE = 'Poloniapp — Centro Cultural Opus Dei, Las Condes';
+const DEFAULT_TITLE = 'Polonia — Centro Cultural Opus Dei, Las Condes';
 const DEFAULT_DESCRIPTION = 'Actividades, formación y oración del centro cultural Polonia, Las Condes.';
 
 $path = (string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
@@ -50,7 +50,7 @@ try {
             [$parts[1], $parts[1]]
         );
         if ($a) {
-            $meta['title'] = $a['title'] . ' — Poloniapp';
+            $meta['title'] = $a['title'] . ' — Polonia';
             $meta['description'] = plain($a['description'] ?: ($a['category'] ? $a['category'] . ' en el centro cultural Polonia, Las Condes.' : DEFAULT_DESCRIPTION));
             if ($a['photo_url'] && $a['category_slug'] !== 'circulos') {
                 $meta['image'] = $a['photo_url'];
@@ -58,20 +58,24 @@ try {
         } else {
             $meta['found'] = false;
         }
+    } elseif (($parts[0] ?? '') === 'actividades' && in_array($parts[1] ?? '', ['formacion', 'trabajo', 'familia'], true)) {
+        $labels = ['formacion' => 'Formación', 'trabajo' => 'Trabajo', 'familia' => 'Familia'];
+        $meta['title'] = $labels[$parts[1]] . ' — Polonia';
+        $meta['description'] = 'Actividades de ' . strtolower($labels[$parts[1]]) . ' en el centro cultural Polonia, Las Condes.';
     } elseif (($parts[0] ?? '') === 'actividades' && isset($parts[1])) {
         $cat = $one('SELECT name, description FROM categories WHERE slug = ? AND visible = 1', [$parts[1]]);
         if ($cat) {
-            $meta['title'] = $cat['name'] . ' — Poloniapp';
+            $meta['title'] = $cat['name'] . ' — Polonia';
             $meta['description'] = plain($cat['description'] ?: $cat['name'] . ' en el centro cultural Polonia, Las Condes.');
         } else {
             $meta['found'] = false;
         }
     } elseif (($parts[0] ?? '') === 'actividades') {
-        $meta['title'] = 'Actividades — Poloniapp';
+        $meta['title'] = 'Actividades — Polonia';
     } elseif (($parts[0] ?? '') === 'quienes-somos' && ($parts[1] ?? '') === 'proyectos' && isset($parts[2])) {
         $p = $one('SELECT title, tagline, summary, logo_url FROM projects WHERE slug = ? AND visible = 1', [$parts[2]]);
         if ($p) {
-            $meta['title'] = $p['title'] . ($p['tagline'] ? ' · ' . $p['tagline'] : '') . ' — Poloniapp';
+            $meta['title'] = $p['title'] . ($p['tagline'] ? ' · ' . $p['tagline'] : '') . ' — Polonia';
             $meta['description'] = plain($p['summary'] ?: DEFAULT_DESCRIPTION);
             if ($p['logo_url']) {
                 $meta['image'] = $p['logo_url'];
@@ -81,7 +85,7 @@ try {
         }
     } elseif (($parts[0] ?? '') === 'quienes-somos') {
         $teaser = $one("SELECT value FROM site_content WHERE `key` = 'quienes_somos.teaser'", []);
-        $meta['title'] = 'Quiénes somos — Poloniapp';
+        $meta['title'] = 'Quiénes somos — Polonia';
         $meta['description'] = plain($teaser['value'] ?? DEFAULT_DESCRIPTION);
     }
 } catch (Throwable $e) {
@@ -95,7 +99,7 @@ $h = function (string $s): string {
 $tags = '<title>' . $h($meta['title']) . "</title>\n"
     . '  <meta name="description" content="' . $h($meta['description']) . "\">\n"
     . "  <meta property=\"og:type\" content=\"website\">\n"
-    . "  <meta property=\"og:site_name\" content=\"Poloniapp\">\n"
+    . "  <meta property=\"og:site_name\" content=\"Polonia\">\n"
     . '  <meta property="og:title" content="' . $h($meta['title']) . "\">\n"
     . '  <meta property="og:description" content="' . $h($meta['description']) . "\">\n"
     . '  <meta property="og:image" content="' . $h($image) . "\">\n"

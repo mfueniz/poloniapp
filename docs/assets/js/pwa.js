@@ -156,7 +156,7 @@ function refresh() {
       ? 'Descarga la aplicación y activa las notificaciones.'
       : 'Activa las notificaciones y te avisamos cuando haya una actividad nueva.';
   slot.innerHTML = `
-    <aside class="app-banner" aria-label="Aplicación Poloniapp">
+    <aside class="app-banner" aria-label="Aplicación Polonia">
       <button type="button" class="close" aria-label="Cerrar">×</button>
       <div class="icon"><img src="${MARK}" alt=""></div>
       <p class="title">No te pierdas nada de Polonia</p>
@@ -202,7 +202,7 @@ export async function openNotifications() {
     text = 'Este navegador no permite notificaciones. Prueba con Chrome en Android, o con la app instalada en iPhone (iOS 16.4 o superior).';
   } else if (Notification.permission === 'denied') {
     text =
-      'Las notificaciones están bloqueadas para Poloniapp en este teléfono. Para activarlas: abre los ajustes del navegador (o del teléfono) → Notificaciones → poloniapp.cl → Permitir. Después vuelve aquí.';
+      'Las notificaciones están bloqueadas para Polonia en este teléfono. Para activarlas: abre los ajustes del navegador (o del teléfono) → Notificaciones → poloniapp.cl → Permitir. Después vuelve aquí.';
   } else if (Notification.permission === 'granted') {
     try {
       await ensureSubscription();
@@ -251,19 +251,19 @@ function showInstructions() {
       ? [
           `Toca el botón <strong>Compartir</strong> ${SHARE_ICON} en la barra de Safari.`,
           'Elige <strong>Agregar a inicio</strong> y confirma con <strong>Agregar</strong>.',
-          'Abre <strong>Poloniapp</strong> desde tu pantalla de inicio y toca <strong>Activar notificaciones</strong>.',
+          'Abre <strong>Polonia</strong> desde tu pantalla de inicio y toca <strong>Activar notificaciones</strong>.',
         ]
       : [
           'Toca el menú <strong>⋮</strong> del navegador (arriba a la derecha).',
           'Elige <strong>Instalar aplicación</strong> o <strong>Agregar a la pantalla principal</strong>.',
-          'Abre <strong>Poloniapp</strong> desde tu pantalla de inicio.',
+          'Abre <strong>Polonia</strong> desde tu pantalla de inicio.',
         ];
   const canNotifyHere = platform === 'android' && pushSupported() && Notification.permission === 'default';
   const backdrop = document.createElement('div');
   backdrop.className = 'sheet-backdrop';
   backdrop.innerHTML = `
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
-      <h3 id="sheet-title">Instala Poloniapp en tu teléfono</h3>
+      <h3 id="sheet-title">Instala Polonia en tu teléfono</h3>
       <ol>${steps.map((s) => `<li>${s}</li>`).join('')}</ol>
       ${canNotifyHere ? '<button type="button" class="btn block" data-notify>Activar notificaciones</button>' : ''}
       <button type="button" class="btn ghost block" data-close style="margin-top:10px;">Entendido</button>

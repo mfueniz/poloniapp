@@ -95,7 +95,7 @@ function push_unsubscribe(array $input): void
 function push_message(): array
 {
     $msg = json_decode((string) setting('last_push'), true);
-    return is_array($msg) ? $msg : ['title' => 'Poloniapp', 'body' => 'Hay novedades en Poloniapp.', 'url' => './'];
+    return is_array($msg) ? $msg : ['title' => 'Polonia', 'body' => 'Hay novedades en Polonia.', 'url' => './'];
 }
 
 function b64url_decode(string $s): string

@@ -221,6 +221,12 @@ async function loadContenido() {
 // ---------------------------------------------------------------------------
 const WEEKDAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const NEW_CATEGORY = '__new';
+// Categorías principales (categories.bucket); cada etiqueta (categoría de la base) va en una.
+const MAIN_CATEGORIES = [
+  { key: 'formacion', label: 'Formación' },
+  { key: 'laboral', label: 'Trabajo' },
+  { key: 'familia', label: 'Familia' },
+];
 let poloniaId = null;
 let openAfterReload = null;
 
@@ -320,12 +326,21 @@ async function loadActividades() {
   const circlesId = categories.find((c) => c.slug === 'circulos')?.id;
   const selectable = categories.filter((c) => c.slug !== 'publicaciones');
 
-  const catOptions = (selectedId) =>
-    selectable
-      .filter((c) => c.visible || c.id === selectedId)
-      .map((c) => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${esc(c.name)}</option>`)
-      .join('') + `<option value="${NEW_CATEGORY}">+ Nueva categoría…</option>`;
-  const catName = (id) => categories.find((c) => c.id === id)?.name || '';
+  const option = (c, selectedId) => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${esc(c.name)}</option>`;
+  const catOptions = (selectedId) => {
+    const usable = selectable.filter((c) => c.visible || c.id === selectedId);
+    const groups = MAIN_CATEGORIES.map((m) => {
+      const tags = usable.filter((c) => c.bucket === m.key);
+      return tags.length ? `<optgroup label="${m.label}">${tags.map((c) => option(c, selectedId)).join('')}</optgroup>` : '';
+    }).join('');
+    const loose = usable.filter((c) => !MAIN_CATEGORIES.some((m) => m.key === c.bucket));
+    return groups + loose.map((c) => option(c, selectedId)).join('') + `<option value="${NEW_CATEGORY}">+ Nueva etiqueta…</option>`;
+  };
+  const catName = (id) => {
+    const c = categories.find((x) => x.id === id);
+    const main = MAIN_CATEGORIES.find((m) => m.key === c?.bucket);
+    return [main?.label, c?.name].filter(Boolean).join(' · ');
+  };
 
   function activityFormHtml(a) {
     const sessions = a?.sessions?.length ? a.sessions : [null];
@@ -335,11 +350,14 @@ async function loadActividades() {
           <div><label>Título</label><input type="text" class="f-title title-input" value="${esc(a?.title)}" placeholder="ej. Retiro de Noviembre"></div>
         </div>
         <div class="crud-row">
-          <div><label>Categoría</label><select class="f-category">${a ? '' : '<option value="" selected>Elige una categoría…</option>'}${catOptions(a?.category_id)}</select></div>
+          <div><label>Categoría y etiqueta</label><select class="f-category">${a ? '' : '<option value="" selected>Elige una etiqueta…</option>'}${catOptions(a?.category_id)}</select></div>
           <div class="crud-check"><label><input type="checkbox" class="f-visible" ${!a || a.visible ? 'checked' : ''}> visible en el sitio</label></div>
         </div>
         <div class="crud-row new-category" hidden>
-          <div><label>Nombre de la categoría nueva</label><input type="text" class="f-new-category" placeholder="ej. Encuentros Matrimoniales"></div>
+          <div><label>Nombre de la etiqueta nueva</label><input type="text" class="f-new-category" placeholder="ej. Retiros mensuales"></div>
+          <div style="flex:0 0 170px;"><label>Va en la categoría</label>
+            <select class="f-new-bucket">${MAIN_CATEGORIES.map((m) => `<option value="${m.key}">${m.label}</option>`).join('')}</select>
+          </div>
         </div>
         <div class="crud-row">
           <div><label>Descripción</label><textarea class="f-desc" rows="3">${esc(a?.description)}</textarea></div>
@@ -552,7 +570,7 @@ function wireActivityCard(card) {
       return;
     }
     if (!categorySelect.value) {
-      status.textContent = 'Elige una categoría (o crea una nueva).';
+      status.textContent = 'Elige una etiqueta (o crea una nueva).';
       return;
     }
     saveBtn.disabled = true;
@@ -561,7 +579,8 @@ function wireActivityCard(card) {
     let categoryId = categorySelect.value;
     if (categoryId === NEW_CATEGORY) {
       const name = card.querySelector('.f-new-category').value.trim();
-      const { data: created, error: catError } = await attempt(api('category_create', { method: 'POST', body: { name } }));
+      const bucket = card.querySelector('.f-new-bucket').value;
+      const { data: created, error: catError } = await attempt(api('category_create', { method: 'POST', body: { name, bucket } }));
       if (catError) {
         saveBtn.disabled = false;
         status.textContent = 'Error: ' + catError.message;

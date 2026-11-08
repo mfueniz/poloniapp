@@ -1,15 +1,15 @@
-/* Poloniapp admin — panel simple, misma paleta y tipografía que el sitio (ver assets/css/site.css). */
+/* Polonia admin — panel simple, misma paleta y tipografía que el sitio (ver assets/css/site.css). */
 
 :root {
   --color-primary: #E2241A;   /* rojo de interfaz (el #EB271C de la paleta, apenas más oscuro para el contraste) */
   --color-slate: #42576B;     /* pizarra */
   --color-ink: #2B3A48;
-  --color-sky: #85BAEA;
-  --color-sky-soft: #EDF5FD;
+  --color-sky: #C9CED4;       /* gris (antes celeste) */
+  --color-sky-soft: #ECEEF1;
   --color-olive: #767865;
-  --color-surface: #F4F7FA;
-  --color-paper: #FFFFFF;
-  --color-border: #DCE3EA;
+  --color-surface: #FFFFFF;   /* tarjetas sobre el fondo gris */
+  --color-paper: #F2F3F5;     /* fondo de la página: gris clarito */
+  --color-border: #DDE1E6;
   --font-body: 'Google Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -70,7 +70,7 @@ a { color: var(--color-primary); }
   padding: 8px 15px; border-radius: 999px; border: 1px solid var(--color-border);
   background: #fff; color: var(--color-slate); font-size: 0.85rem; font-weight: 500; cursor: pointer;
 }
-.admin-tabs button.active { background: var(--color-sky); border-color: var(--color-sky); color: var(--color-ink); font-weight: 700; }
+.admin-tabs button.active { background: var(--color-ink); border-color: var(--color-ink); color: #fff; font-weight: 700; }
 .admin-tabs button:disabled { opacity: 0.4; cursor: default; }
 
 .tab-note {
@@ -133,7 +133,7 @@ a { color: var(--color-primary); }
 
 .sessions-block { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-border); }
 .sessions-block h4 { font-size: 0.82rem; margin: 0 0 8px; color: var(--color-slate); }
-.session-crud-row { background: #fff; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.session-crud-row { background: var(--color-sky-soft); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
 .add-btn {
   padding: 7px 14px; border: 1px solid var(--color-primary); background: transparent; color: var(--color-primary);
   border-radius: 8px; font-size: 0.82rem; cursor: pointer; margin-top: 6px;
@@ -177,7 +177,7 @@ details.acc > summary::before, details.item > summary::before {
 details[open] > summary::before { transform: rotate(90deg); }
 details.acc[open] { padding: 0 12px 12px; }
 details.acc[open] > summary { padding-left: 4px; padding-right: 4px; }
-details.acc-new { background: var(--color-sky-soft); border-color: #D5E6F8; }
+details.acc-new { background: #fff; border-color: var(--color-border); }
 details.acc-new > summary { color: var(--color-primary); }
 
 details.item { background: var(--color-surface); border-radius: 12px; margin-bottom: 8px; }
@@ -190,7 +190,7 @@ details.item .item-title { font-weight: 600; font-size: 0.92rem; }
 details.item .item-meta { font-size: 0.8rem; color: var(--color-olive); }
 details.item[open] > summary { border-bottom: 1px solid var(--color-border); }
 details.item > .crud-card { margin: 0; background: transparent; }
-details.acc details.item { background: var(--color-surface); }
+details.acc details.item { background: var(--color-sky-soft); }
 
 /* --- Editor de secciones de proyecto --- */
 .sub-title { font-size: 0.85rem; color: var(--color-slate); margin: 16px 0 8px; }

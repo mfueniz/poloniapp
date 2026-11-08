@@ -267,24 +267,26 @@ function mb_lower(string $s): string
     return function_exists('mb_strtolower') ? mb_strtolower($s, 'UTF-8') : strtr(strtolower($s), ['Á' => 'á', 'É' => 'é', 'Í' => 'í', 'Ó' => 'ó', 'Ú' => 'ú', 'Ü' => 'ü', 'Ñ' => 'ñ']);
 }
 
-/** Crea una categoría (o reactiva una oculta con el mismo nombre) y devuelve su id. */
+/** Crea una etiqueta (categoría) dentro de Formación / Trabajo / Familia, o reactiva una oculta con el mismo nombre. */
 function create_category(array $input): array
 {
     $name = trim((string) ($input['name'] ?? ''));
     $slug = slugify($name);
+    // Grupo principal de la etiqueta: Formación, Trabajo o Familia.
+    $bucket = in_array($input['bucket'] ?? '', ['formacion', 'laboral', 'familia'], true) ? $input['bucket'] : 'formacion';
     if ($name === '' || $slug === '') {
-        throw new ApiError('Escribe el nombre de la categoría.', 400);
+        throw new ApiError('Escribe el nombre de la etiqueta.', 400);
     }
     $st = db()->prepare('SELECT id FROM categories WHERE slug = ?');
     $st->execute([$slug]);
     if ($id = $st->fetchColumn()) {
-        db()->prepare('UPDATE categories SET visible = 1 WHERE id = ?')->execute([$id]);
+        db()->prepare('UPDATE categories SET visible = 1, bucket = ? WHERE id = ?')->execute([$bucket, $id]);
         return ['id' => $id, 'name' => $name];
     }
     $id = uuid();
     db()->prepare(
-        'INSERT INTO categories (id, slug, name, sort_order, visible) SELECT ?, ?, ?, COALESCE(MAX(sort_order), 0) + 1, 1 FROM categories'
-    )->execute([$id, $slug, $name]);
+        'INSERT INTO categories (id, slug, name, sort_order, visible, bucket) SELECT ?, ?, ?, COALESCE(MAX(sort_order), 0) + 1, 1, ? FROM categories'
+    )->execute([$id, $slug, $name, $bucket]);
     return ['id' => $id, 'name' => $name];
 }
 
@@ -457,7 +459,7 @@ function save_activity(array $input, array $admin): array
     if ($result['created'] && !empty($activity['visible'])) {
         try {
             $result['notified'] = push_send_all(
-                ['title' => 'Nueva actividad en Poloniapp', 'body' => (string) ($activity['title'] ?? ''), 'url' => './actividad/' . $result['slug']],
+                ['title' => 'Nueva actividad en Polonia', 'body' => (string) ($activity['title'] ?? ''), 'url' => './actividad/' . $result['slug']],
                 'mailto:' . $admin['email']
             );
         } catch (Throwable $e) {
@@ -618,7 +620,7 @@ try {
         case 'POST push_test':
             $admin = require_admin();
             push_send_all(
-                ['title' => 'Prueba de Poloniapp', 'body' => 'Si ves esto, las notificaciones funcionan.', 'url' => './'],
+                ['title' => 'Prueba de Polonia', 'body' => 'Si ves esto, las notificaciones funcionan.', 'url' => './'],
                 'mailto:' . $admin['email']
             );
             respond(push_status());

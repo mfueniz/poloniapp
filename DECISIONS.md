@@ -4,6 +4,17 @@ Log vivo de decisiones de diseño, UX/UI y estructura de contenido tomadas en se
 
 ---
 
+## 2026-11-08 — Ronda 15: grises, "Polonia", tres categorías, página Actividades
+
+- Paleta: fondo de página gris clarito (#F2F3F5) con tarjetas blancas; el celeste se reemplaza por grises (#C9CED4 / #DADDE2 / #ECEEF1); filtros activos en pizarra oscuro; el rojo queda como único acento de color.
+- Marca: el logo pasa a ser "Polonia" (mismas letras del logo anterior, `assets/img/polonia-logo.svg`) y el nombre visible del sitio y de la app instalada también ("— Polonia" en los títulos, notificaciones, manifest). El dominio sigue siendo poloniapp.cl.
+- Inicio en este orden: Actividades → Proyectos → Confesiones → Para rezar hoy → Quiénes somos. Proyectos queda solo con Puentes (Encuentros Matrimoniales oculto; su etiqueta sigue en Familia).
+- Tres categorías principales (`categories.bucket`): Formación, Trabajo y Familia. Las categorías de antes son etiquetas dentro de ellas (Retiros, Charlas de formación, Confesiones, Círculos → Formación; Charlas profesionales → Trabajo; Matrimonio y Familia, Encuentros Matrimoniales → Familia). Filtros del inicio y de Actividades por esas tres; las tarjetas muestran "Categoría · Etiqueta". En el panel el selector agrupa las etiquetas y "+ Nueva etiqueta…" pide en qué categoría va.
+- Página Actividades: lista directamente todas las próximas (como el inicio, sin límite) y debajo "Actividades anteriores" con las del año en curso. `/actividades/formacion|trabajo|familia` abre con ese filtro; `/actividades/<etiqueta>` sigue funcionando.
+- Círculos ocultos por ahora (sus actividades quedan con visible = 0; se reactivan desde el panel, acordeón Círculos).
+
+---
+
 ## 2026-10-27 — Ronda 14: direcciones sin "#"
 
 - El "#" venía de GitHub Pages (hosting que no se puede configurar). En el servidor propio se pasa a direcciones limpias: `poloniapp.cl/actividad/retiro-de-noviembre`, `/actividades/circulos`, `/quienes-somos/proyectos/puentes`. El sitio navega con History API (sin recargar); los links antiguos con `#/…` redirigen solos.
