@@ -4,6 +4,15 @@ Log vivo de decisiones de diseño, UX/UI y estructura de contenido tomadas en se
 
 ---
 
+## 2026-11-08 — Ronda 16: actividades reales
+
+- Migración 8: fechas reales de los afiches para las actividades que se habían movido a noviembre de prueba (Catolicismo Ciclo 2 con sus 5 encuentros de julio y agosto, renombrada "Catolicismo: profundizar la fe — Ciclo 2"; Encuentro de Matrimonios 13 ago y 3 sept; Optimal Work solo 1 may; Retiro de Agosto 11 y 12 ago). Se oculta "Retiro Mensual de noviembre" (era de prueba).
+- Nuevas: "Curso de Retiro" (13–15 nov, Algarrobo, $50.000, inscripción por WhatsApp con Pablo Manterola) en la etiqueta nueva "Cursos de retiro" (Formación), distinta de "Retiros Mensuales"; y "El precio del éxito" (3 nov, ciclo de conversaciones con Ignacio Ruiz-Tagle, Charlas profesionales / Trabajo).
+- Inicio: título grande a 1.5rem (antes 1.85rem) y menos espacio entre la frase y Actividades.
+- El deploy imprime la lista de actividades publicadas (API pública) para revisar producción desde el registro.
+
+---
+
 ## 2026-11-08 — Ronda 15: grises, "Polonia", tres categorías, página Actividades
 
 - Paleta: fondo de página gris clarito (#F2F3F5) con tarjetas blancas; el celeste se reemplaza por grises (#C9CED4 / #DADDE2 / #ECEEF1); filtros activos en pizarra oscuro; el rojo queda como único acento de color.

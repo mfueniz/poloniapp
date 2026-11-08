@@ -137,7 +137,112 @@ function migrations(): array
             "UPDATE activities a JOIN categories c ON c.id = a.category_id SET a.visible = 0 WHERE c.slug = 'circulos'",
             "UPDATE projects SET visible = 0, show_on_home = 0 WHERE slug = 'encuentros-matrimoniales'",
         ],
+
+        // 2026-11-08 (b): actividades reales. Fechas de los afiches para las que se habían
+        // movido a noviembre de prueba, se oculta el retiro mensual de prueba y se cargan el
+        // Curso de Retiro (13–15 nov, Algarrobo) y El precio del éxito (3 nov).
+        8 => [
+            'load_real_activities',
+        ],
     ];
+}
+
+function load_real_activities(): void
+{
+    $pdo = db();
+    $find = function (string $slug, string $title) use ($pdo) {
+        $st = $pdo->prepare('SELECT id FROM activities WHERE slug = ? OR title = ? LIMIT 1');
+        $st->execute([$slug, $title]);
+        return $st->fetchColumn() ?: null;
+    };
+    $polonia = $pdo->query("SELECT id FROM locations WHERE name = 'Polonia' LIMIT 1")->fetchColumn() ?: null;
+    $addSession = $pdo->prepare(
+        'INSERT INTO sessions (id, activity_id, date, time_start, time_end, topic, speaker, location_id, location_text, price)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    $session = function (string $activityId, string $date, ?string $start, ?string $end = null, ?string $topic = null, ?string $speaker = null, ?string $place = null, ?string $price = null) use ($addSession, $polonia) {
+        // $place null = Polonia (ubicación fija); si no, texto libre.
+        $addSession->execute([uuid(), $activityId, $date, $start, $end, $topic, $speaker, $place ? null : $polonia, $place ?: ($polonia ? null : 'Polonia'), $price]);
+    };
+    $replaceSessions = function (string $activityId) use ($pdo) {
+        $pdo->prepare('DELETE FROM sessions WHERE activity_id = ?')->execute([$activityId]);
+    };
+
+    // Catolicismo, Ciclo 2: los 5 encuentros del afiche (julio y agosto, 19:15, Polonia)
+    if ($id = $find('catolicismo-ciclo-2-cristo-nos-salva', 'Catolicismo — Ciclo 2: Cristo nos salva')) {
+        $replaceSessions($id);
+        foreach ([
+            ['2026-07-09', 'La Revelación y la Fe: Dios se comunica; el hombre responde'],
+            ['2026-07-23', 'Jesucristo: vida y enseñanza'],
+            ['2026-07-30', 'La Santísima Trinidad: el amor de Dios'],
+            ['2026-08-13', 'Cristo nos salva: su muerte y resurrección'],
+            ['2026-08-20', 'Cristo vive: la oración y los sacramentos'],
+        ] as [$date, $topic]) {
+            $session($id, $date, '19:15', null, $topic);
+        }
+        $title = 'Catolicismo: profundizar la fe — Ciclo 2';
+        $pdo->prepare("UPDATE activities SET title = ?, format = 'series', slug = ? WHERE id = ?")
+            ->execute([$title, unique_slug('activities', $title, $id), $id]);
+    }
+
+    // Encuentro de Matrimonios: 13 de agosto y 3 de septiembre (Cerro Colorado)
+    if ($id = $find('encuentro-de-matrimonios', 'Encuentro de Matrimonios')) {
+        $replaceSessions($id);
+        $place = 'Las Condes — Cerro Colorado';
+        $session($id, '2026-08-13', '20:30', '21:30', 'Transmisión de la fe en la familia', 'Ronald Bown', $place, '$10.000 por matrimonio, para la comida');
+        $session($id, '2026-09-03', '20:30', '21:30', 'La educación de hijos hombres e hijas mujeres', 'Álvaro Ibáñez', $place, '$10.000 por matrimonio, para la comida');
+    }
+
+    // Optimal Work: solo su fecha real (1 de mayo); se quitan las agregadas de prueba
+    if ($id = $find('optimal-work', 'Optimal Work')) {
+        $pdo->prepare("DELETE FROM sessions WHERE activity_id = ? AND date >= '2026-11-01'")->execute([$id]);
+    }
+
+    // Retiro de Agosto: martes 11 y miércoles 12, 19:15 a 20:45
+    if ($id = $find('retiro-de-agosto', 'Retiro de Agosto')) {
+        $replaceSessions($id);
+        $session($id, '2026-08-11', '19:15', '20:45');
+        $session($id, '2026-08-12', '19:15', '20:45');
+    }
+
+    // Retiro mensual de prueba: se oculta (se puede volver a mostrar desde el panel)
+    $pdo->prepare("UPDATE activities SET visible = 0 WHERE slug = 'retiro-mensual-de-noviembre' OR title = 'Retiro Mensual de noviembre'")->execute();
+
+    // Etiqueta "Cursos de retiro" (Formación), distinta de los retiros mensuales
+    $pdo->exec("INSERT INTO categories (id, slug, name, sort_order, visible, bucket)
+                SELECT UUID(), 'cursos-de-retiro', 'Cursos de retiro', COALESCE(MAX(sort_order), 0) + 1, 1, 'formacion' FROM categories
+                WHERE NOT EXISTS (SELECT 1 FROM categories WHERE slug = 'cursos-de-retiro')");
+    $tag = function (string $slug) use ($pdo) {
+        $st = $pdo->prepare('SELECT id FROM categories WHERE slug = ?');
+        $st->execute([$slug]);
+        return $st->fetchColumn() ?: null;
+    };
+    $insert = $pdo->prepare(
+        'INSERT INTO activities (id, category_id, title, slug, description, format, photo_url, visible, registration_whatsapp)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)'
+    );
+
+    if (!$find('curso-de-retiro', 'Curso de Retiro') && ($cat = $tag('cursos-de-retiro'))) {
+        $id = uuid();
+        $insert->execute([
+            $id, $cat, 'Curso de Retiro', unique_slug('activities', 'Curso de Retiro', $id),
+            'Tres días de retiro en Algarrobo, del viernes 13 al domingo 15 de noviembre. Cupos limitados. Inscripciones con Pablo Manterola. «¿No ves que te está esperando… desde hace tanto tiempo?» (San Josemaría)',
+            'series', 'assets/activities/curso-de-retiro-2026.webp', '+56 9 6607 1053',
+        ]);
+        $session($id, '2026-11-13', null, null, null, null, 'Algarrobo', '$50.000');
+        $session($id, '2026-11-14', null, null, null, null, 'Algarrobo');
+        $session($id, '2026-11-15', null, null, null, null, 'Algarrobo');
+    }
+
+    if (!$find('el-precio-del-exito', 'El precio del éxito') && ($cat = $tag('charlas-profesionales'))) {
+        $id = uuid();
+        $insert->execute([
+            $id, $cat, 'El precio del éxito', unique_slug('activities', 'El precio del éxito', $id),
+            'Ciclo de conversaciones con Ignacio Ruiz-Tagle. Cupos limitados.',
+            'single', 'assets/activities/el-precio-del-exito.webp', null,
+        ]);
+        $session($id, '2026-11-03', '20:00', null, null, 'Ignacio Ruiz-Tagle', null, 'CLP 5.000 para la comida');
+    }
 }
 
 /**
