@@ -3,7 +3,7 @@
 // Home: frase + bajada → banner de la app (solo celular) → actividades próximas → Para rezar hoy.
 
 import { api } from './api.js';
-import { renderAppBanner, openNotifications } from './pwa.js?v=20261108';
+import { renderAppBanner, openNotifications } from './pwa.js?v=20261108b';
 
 // Raíz real del sitio (docs/), calculada desde la ubicación de este script.
 const ASSETS_BASE = new URL('../../', import.meta.url).href;
@@ -412,7 +412,7 @@ function renderHome() {
       <p>${esc(state.content['hero.subtitle'])}</p>
     </section>
     <div id="app-banner-slot"></div>
-    <section class="section" style="padding-bottom:10px;">
+    <section class="section" style="padding-top:14px;padding-bottom:10px;">
       <h2 class="section-title" style="margin:0;">Actividades</h2>
     </section>
     <nav class="chips" id="chips" aria-label="Filtrar por categoría"></nav>

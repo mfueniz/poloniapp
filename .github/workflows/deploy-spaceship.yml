@@ -133,3 +133,20 @@ jobs:
           check /actividades '<title>Actividades — Polonia</title>'
           check /quienes-somos '<title>Quiénes somos — Polonia</title>'
           check '/api/?action=status' 'needs_setup'
+
+      # Lista pública de actividades publicadas (títulos, etiqueta y fechas), para revisar los
+      # datos de producción desde el registro del deploy. Solo lee la API pública.
+      - name: Listar actividades publicadas
+        if: steps.check.outputs.ready == 'true'
+        env:
+          SITE_URL: ${{ vars.SITE_URL || 'https://poloniapp.cl' }}
+        run: |
+          curl -sS --max-time 30 "$SITE_URL/api/?action=public" | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)
+          cats = {c["id"]: c for c in d["categories"]}
+          for a in sorted(d["activities"], key=lambda a: a["title"]):
+              c = cats.get(a["category_id"], {})
+              fechas = ", ".join(sorted((s.get("date") or s.get("weekday") or "?") + " " + (s.get("time_start") or "")[:5] for s in a["sessions"]))
+              print(a["title"] + " | " + str(c.get("bucket")) + "/" + str(c.get("name")) + " | " + fechas)
+          '
