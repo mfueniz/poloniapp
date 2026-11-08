@@ -129,6 +129,8 @@ a { color: var(--color-primary); }
 .crud-actions .save { background: var(--color-primary); color: #fff; }
 .crud-actions .save:disabled { opacity: 0.4; cursor: default; }
 .crud-actions .delete { background: transparent; color: #b3392a; border: 1px solid #e3b6ac; }
+.crud-actions .resend { background: transparent; color: var(--color-slate); border: 1px solid var(--color-border); }
+.crud-actions .resend:disabled { opacity: 0.5; cursor: default; }
 .crud-actions .status { font-size: 0.78rem; color: #2F6B3A; }
 
 .sessions-block { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-border); }

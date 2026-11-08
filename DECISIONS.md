@@ -4,6 +4,14 @@ Log vivo de decisiones de diseño, UX/UI y estructura de contenido tomadas en se
 
 ---
 
+## 2026-11-08 — Ronda 17: reenviar notificación
+
+- Panel → Actividades: cada actividad existente tiene el botón **Reenviar notificación** (pide confirmación). Manda a todos los dispositivos suscritos un aviso con título "Polonia" y el texto "<actividad> · <próxima fecha>" (ej. "Curso de Retiro · viernes 13 de noviembre"; las semanales: "todos los martes"); al tocarlo abre la página de la actividad. El título no dice "Nueva actividad" porque sirve como recordatorio.
+- Usa lo guardado en la base (no lo que esté sin guardar en el formulario). Si la actividad está oculta, no envía y lo explica: el link llevaría a una página que no existe.
+- API: `POST ?action=push_activity {id}` (solo admins). Devuelve cuántos dispositivos lo recibieron y el estado de notificaciones, para actualizar el recuadro "Último envío".
+
+---
+
 ## 2026-11-08 — Ronda 16: actividades reales
 
 - Migración 8: fechas reales de los afiches para las actividades que se habían movido a noviembre de prueba (Catolicismo Ciclo 2 con sus 5 encuentros de julio y agosto, renombrada "Catolicismo: profundizar la fe — Ciclo 2"; Encuentro de Matrimonios 13 ago y 3 sept; Optimal Work solo 1 may; Retiro de Agosto 11 y 12 ago). Se oculta "Retiro Mensual de noviembre" (era de prueba).

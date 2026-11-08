@@ -15,6 +15,7 @@
 //            POST ?action=save_activity     actividad + todas sus sesiones en un solo guardado
 //            POST ?action=admin_add|admin_delete|password   gestión de administradores
 //            GET  ?action=prayer_admin|stats   POST ?action=prayer_refresh|prayer_override|push_test
+//            POST ?action=push_activity     reenviar la notificación de una actividad
 //
 // Las credenciales de la base viven en config.php, que genera el workflow de deploy desde los
 // GitHub Secrets (nunca va en el repo). Ver config.sample.php.
@@ -358,6 +359,45 @@ function save_row(string $table, array $input, array $admin): array
  * Primer slug libre entre los textos candidatos (ej. el nombre, y si se repite, el nombre con
  * día y hora); si todos están tomados, el primero con -2, -3…
  */
+/** "2026-11-13" -> "viernes 13 de noviembre" (usa DAYS_ES / MONTHS_ES de prayer.php). */
+function date_label(string $date): string
+{
+    $ts = strtotime($date);
+    return DAYS_ES[(int) date('w', $ts)] . ' ' . date('j', $ts) . ' de ' . MONTHS_ES[(int) date('n', $ts) - 1];
+}
+
+/**
+ * Reenvía la notificación de una actividad (botón del panel). El texto lleva su próxima fecha.
+ * Solo actividades visibles: avisar de una oculta llevaría a una página que no existe.
+ */
+function push_activity(string $id, array $admin): array
+{
+    $st = db()->prepare('SELECT id, title, slug, visible FROM activities WHERE id = ?');
+    $st->execute([$id]);
+    $a = $st->fetch();
+    if (!$a) {
+        throw new ApiError('No se encontró la actividad.', 404);
+    }
+    if (!(int) $a['visible']) {
+        throw new ApiError('La actividad está oculta: márcala como visible antes de avisar.', 400);
+    }
+    $st = db()->prepare('SELECT date, weekday FROM sessions WHERE activity_id = ? AND (date >= ? OR date IS NULL) ORDER BY date IS NULL, date LIMIT 1');
+    $st->execute([$id, date('Y-m-d')]);
+    $next = $st->fetch();
+    $when = '';
+    if ($next && $next['date']) {
+        $when = date_label($next['date']);
+    } elseif ($next && $next['weekday']) {
+        $day = mb_lower((string) $next['weekday']);
+        $when = 'todos los ' . $day . (substr($day, -1) === 's' ? '' : 's'); // "todos los sábados"
+    }
+    $sent = push_send_all(
+        ['title' => 'Polonia', 'body' => $a['title'] . ($when ? ' · ' . $when : ''), 'url' => './actividad/' . ($a['slug'] ?: $a['id'])],
+        'mailto:' . $admin['email']
+    );
+    return ['sent' => $sent];
+}
+
 function unique_slug(string $table, $texts, ?string $excludeId): string
 {
     $st = db()->prepare('SELECT 1 FROM ' . q($table) . ' WHERE slug = ? AND id <> ?');
@@ -616,6 +656,10 @@ try {
         case 'GET stats':
             require_admin();
             respond(push_status());
+
+        case 'POST push_activity':
+            $admin = require_admin();
+            respond(push_activity((string) (body()['id'] ?? ''), $admin) + push_status());
 
         case 'POST push_test':
             $admin = require_admin();

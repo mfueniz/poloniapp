@@ -381,6 +381,7 @@ async function loadActividades() {
         ${registrationBlockHtml(a)}
         <div class="crud-actions form-actions">
           <button class="save">${a ? 'Guardar' : 'Crear actividad'}</button>
+          ${a ? `<button class="resend" title="Manda otra vez el aviso de esta actividad a todos los que activaron las notificaciones">Reenviar notificación</button>` : ''}
           ${a ? `<button class="delete">Borrar actividad</button>` : ''}
           ${a?.slug ? `<a href="/actividad/${esc(a.slug)}" target="_blank" rel="noopener" class="view-link">ver en el sitio →</a>` : ''}
           <span class="status"></span>
@@ -450,7 +451,7 @@ function pushBoxHtml(stats) {
   const errors = (r?.errors || []).map((e) => `${esc(e.service)} → ${e.code ? 'HTTP ' + e.code : 'sin respuesta'}${e.detail ? ' (' + esc(e.detail) + ')' : ''}`).join('<br>');
   return `
     <div class="tab-note push-box">
-      <p><strong>Notificaciones:</strong> al crear una actividad visible se avisa a los <strong>${stats.subscribers}</strong> dispositivos que las activaron${services ? ` (${services})` : ''}.</p>
+      <p><strong>Notificaciones:</strong> al crear una actividad visible se avisa a los <strong>${stats.subscribers}</strong> dispositivos que las activaron${services ? ` (${services})` : ''}. Para volver a avisar de una actividad, ábrela y usa <strong>Reenviar notificación</strong>.</p>
       ${
         stats.subscribers
           ? ''
@@ -614,6 +615,31 @@ function wireActivityCard(card) {
     }
     openAfterReload = 'a-' + data.id;
     loadActividades();
+  });
+
+  // Reenviar el aviso (usa lo guardado: si cambiaste algo, primero Guardar).
+  const resendBtn = card.querySelector('.form-actions .resend');
+  resendBtn?.addEventListener('click', async () => {
+    const title = card.querySelector('.f-title').value.trim();
+    if (!confirm(`¿Enviar ahora una notificación de «${title}» a todos los que activaron las notificaciones?`)) return;
+    resendBtn.disabled = true;
+    status.textContent = 'Enviando…';
+    const { data, error } = await attempt(api('push_activity', { method: 'POST', body: { id } }));
+    resendBtn.disabled = false;
+    if (error) {
+      status.textContent = 'Error: ' + error.message;
+      return;
+    }
+    const total = data.last_report?.total ?? data.subscribers;
+    status.textContent = total
+      ? `Notificación enviada ✓ Llegó a ${data.sent} de ${total} dispositivo${total > 1 ? 's' : ''}.`
+      : 'No hay dispositivos con las notificaciones activadas.';
+    // El recuadro de arriba muestra el nuevo "último envío".
+    const box = document.querySelector('.push-box');
+    if (box) {
+      box.outerHTML = pushBoxHtml(data);
+      wirePushBox(document);
+    }
   });
 
   deleteBtn?.addEventListener('click', async () => {
