@@ -144,7 +144,33 @@ function migrations(): array
         8 => [
             'load_real_activities',
         ],
+
+        // 2026-11-09: "Qué hacemos" (Quiénes somos) pasa a ser texto editable en Contenido fijo.
+        // Parte con lo mismo que hoy se arma solo (categorías con sus etiquetas en uso).
+        9 => [
+            'seed_que_hacemos',
+        ],
     ];
+}
+
+function seed_que_hacemos(): void
+{
+    $pdo = db();
+    $tags = $pdo->query(
+        'SELECT c.name, c.bucket FROM categories c
+         WHERE c.visible = 1 AND EXISTS (SELECT 1 FROM activities a WHERE a.category_id = c.id AND a.visible = 1)
+         ORDER BY c.sort_order'
+    )->fetchAll();
+    $lines = [];
+    foreach (['formacion' => 'Formación', 'laboral' => 'Trabajo', 'familia' => 'Familia'] as $bucket => $label) {
+        $names = array_column(array_filter($tags, function ($t) use ($bucket) {
+            return $t['bucket'] === $bucket;
+        }), 'name');
+        $lines[] = '**' . $label . '**' . ($names ? ': ' . implode(', ', $names) : '');
+    }
+    $insert = $pdo->prepare('INSERT IGNORE INTO site_content (`key`, section, value) VALUES (?, ?, ?)');
+    $insert->execute(['quienes_somos.que_hacemos_titulo', 'Quiénes somos', 'Qué hacemos']);
+    $insert->execute(['quienes_somos.que_hacemos', 'Quiénes somos', implode("\n", $lines)]);
 }
 
 function load_real_activities(): void

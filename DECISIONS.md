@@ -4,6 +4,14 @@ Log vivo de decisiones de diseño, UX/UI y estructura de contenido tomadas en se
 
 ---
 
+## 2026-11-09 — Ronda 18: "Qué hacemos" editable
+
+- La sección "Qué hacemos" de Quiénes somos deja de armarse sola con las etiquetas en uso: ahora es texto de Contenido fijo (`quienes_somos.que_hacemos_titulo` y `quienes_somos.que_hacemos`, un punto por línea, `**texto**` para destacar; vacío = la sección no se muestra).
+- Migración 9 la crea con el mismo texto que se veía hasta ahora (Formación / Trabajo / Familia con sus etiquetas), así que el sitio no cambia hasta que alguien la edite.
+- Contenido fijo muestra una ayuda bajo esos dos campos.
+
+---
+
 ## 2026-11-08 — Ronda 17: reenviar notificación
 
 - Panel → Actividades: cada actividad existente tiene el botón **Reenviar notificación** (pide confirmación). Manda a todos los dispositivos suscritos un aviso con título "Polonia" y el texto "<actividad> · <próxima fecha>" (ej. "Curso de Retiro · viernes 13 de noviembre"; las semanales: "todos los martes"); al tocarlo abre la página de la actividad. El título no dice "Nueva actividad" porque sirve como recordatorio.

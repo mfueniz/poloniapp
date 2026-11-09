@@ -3,7 +3,7 @@
 // Home: frase + bajada → banner de la app (solo celular) → actividades próximas → Para rezar hoy.
 
 import { api } from './api.js';
-import { renderAppBanner, openNotifications } from './pwa.js?v=20261108b';
+import { renderAppBanner, openNotifications } from './pwa.js?v=20261109a';
 
 // Raíz real del sitio (docs/), calculada desde la ubicación de este script.
 const ASSETS_BASE = new URL('../../', import.meta.url).href;
@@ -730,6 +730,11 @@ function renderQuienesSomos() {
   const imagen = state.content['quienes_somos.imagen'];
   const address = state.content['contact.address'];
   const mapUrl = state.content['contact.map_url'];
+  // "Qué hacemos": texto de Contenido fijo, un punto por línea (vacío = no se muestra).
+  const queHacemos = (state.content['quienes_somos.que_hacemos'] || '')
+    .split('\n')
+    .map((line) => line.replace(/^\s*[-•]\s*/, '').trim())
+    .filter(Boolean);
 
   view.innerHTML = `
     <section class="page-title"><h1>Quiénes somos</h1></section>
@@ -740,13 +745,14 @@ function renderQuienesSomos() {
     <section class="section" style="padding-top:14px;">
       <p class="about-p">${esc(state.content['quienes_somos.parrafo2'])}</p>
     </section>
-    <section class="section about-block">
-      <h2 class="section-title eyebrow">Qué hacemos</h2>
-      <ul class="about-list">${MAIN_CATEGORIES.map((m) => {
-        const tags = state.categories.filter((c) => c.bucket === m.key && state.activities.some((a) => a.category_id === c.id)).map((c) => c.name);
-        return `<li><strong>${m.label}</strong>${tags.length ? ': ' + esc(tags.join(', ')) : ''}</li>`;
-      }).join('')}</ul>
-    </section>
+    ${
+      queHacemos.length
+        ? `<section class="section about-block">
+      <h2 class="section-title eyebrow">${esc(state.content['quienes_somos.que_hacemos_titulo'] || 'Qué hacemos')}</h2>
+      <ul class="about-list">${queHacemos.map((line) => `<li>${richText(line, { inline: true })}</li>`).join('')}</ul>
+    </section>`
+        : ''
+    }
     ${
       state.projects.length
         ? `<section class="section about-block" id="proyectos">

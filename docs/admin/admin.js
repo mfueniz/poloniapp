@@ -119,6 +119,14 @@ function previewSrc(url) {
 // ---------------------------------------------------------------------------
 // Tab: Contenido fijo
 // ---------------------------------------------------------------------------
+// Ayuda bajo el nombre de algunos campos, y alto inicial (filas) de los que tienen varias líneas.
+const CONTENT_HINTS = {
+  'quienes_somos.que_hacemos_titulo': 'Título de la sección "Qué hacemos" en Quiénes somos.',
+  'quienes_somos.que_hacemos':
+    'Lista "Qué hacemos" de Quiénes somos: un punto por línea. Usa **texto** para destacar, por ejemplo: **Formación**: retiros, charlas. Si lo dejas vacío, la sección no se muestra.',
+};
+const CONTENT_ROWS = { 'quienes_somos.que_hacemos': 6 };
+
 async function loadContenido() {
   const container = document.getElementById('tab-content');
   container.innerHTML = `<p class="loading-note">Cargando…</p>`;
@@ -145,6 +153,7 @@ async function loadContenido() {
             return `
           <div class="field" data-key="${esc(r.key)}">
             <label>${esc(r.key)}</label>
+            ${CONTENT_HINTS[r.key] ? `<p class="field-hint">${esc(CONTENT_HINTS[r.key])}</p>` : ''}
             ${
               isImage
                 ? `<div class="image-field">
@@ -154,7 +163,7 @@ async function loadContenido() {
                    </div>`
                 : ''
             }
-            <textarea${isImage ? ' placeholder="o pega una URL aquí"' : ''}>${esc(r.value)}</textarea>
+            <textarea${isImage ? ' placeholder="o pega una URL aquí"' : ''}${CONTENT_ROWS[r.key] ? ` rows="${CONTENT_ROWS[r.key]}"` : ''}>${esc(r.value)}</textarea>
             <div class="save-row">
               <button class="save">Guardar</button>
               <span class="status"></span>
