@@ -4,6 +4,12 @@ Log vivo de decisiones de diseño, UX/UI y estructura de contenido tomadas en se
 
 ---
 
+## 2026-11-10 — Ronda 19: "Próximas actividades" en el inicio
+
+- El título de la sección de actividades del inicio pasa de "Actividades" a "Próximas actividades" (en minúscula, como "Actividades anteriores" y "Para rezar hoy"). La página /actividades y la barra de navegación siguen diciendo "Actividades".
+
+---
+
 ## 2026-11-09 — Ronda 18: "Qué hacemos" editable
 
 - La sección "Qué hacemos" de Quiénes somos deja de armarse sola con las etiquetas en uso: ahora es texto de Contenido fijo (`quienes_somos.que_hacemos_titulo` y `quienes_somos.que_hacemos`, un punto por línea, `**texto**` para destacar; vacío = la sección no se muestra).

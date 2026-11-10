@@ -413,7 +413,7 @@ function renderHome() {
     </section>
     <div id="app-banner-slot"></div>
     <section class="section" style="padding-top:14px;padding-bottom:10px;">
-      <h2 class="section-title" style="margin:0;">Actividades</h2>
+      <h2 class="section-title" style="margin:0;">Próximas actividades</h2>
     </section>
     <nav class="chips" id="chips" aria-label="Filtrar por categoría"></nav>
     <div id="home-activities"></div>
